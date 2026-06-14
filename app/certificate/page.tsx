@@ -336,7 +336,6 @@ export default function CertificatePage() {
                   flexShrink: 0,
                 }}>{row.label}</span>
                 <span style={{
-                  fontSize: 12, color: '#F5F5F5',
                   textAlign: 'right', lineHeight: 1.4,
                   fontFamily: row.label === 'Certificate ID' ? 'JetBrains Mono, monospace' : 'DM Sans, sans-serif',
                   fontSize: row.label === 'Certificate ID' ? 11 : 12,
