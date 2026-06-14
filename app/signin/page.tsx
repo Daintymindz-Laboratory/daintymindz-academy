@@ -6,11 +6,25 @@ export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => setLoading(false), 1500);
+    setError('');
+    try {
+      const { createClient } = await import('@/lib/supabase');
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) { setError(error.message); setLoading(false); return; }
+      window.location.href = '/dashboard';
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -33,14 +47,9 @@ export default function SignIn() {
             borderLeft: '1px solid #3A3F46', paddingLeft: 10,
           }}>Academy</span>
         </a>
-        <a href="/signup" style={{
-          color: '#6B7280', fontSize: 14, textDecoration: 'none', fontWeight: 500,
-        }}
-          onMouseEnter={e => (e.currentTarget.style.color = '#F5F5F5')}
-          onMouseLeave={e => (e.currentTarget.style.color = '#6B7280')}
-        >
-          No account? Sign up
-        </a>
+
+        <a href="/signup" style={{ color: '#6B7280', fontSize: 14, textDecoration: 'none', fontWeight: 500 }}>No account? Sign up</a>
+
       </nav>
 
       {/* BODY */}
@@ -214,22 +223,22 @@ export default function SignIn() {
                 </a>
               </div>
 
-              {/* Submit */}
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  width: '100%', height: 50,
-                  background: loading ? '#A37808' : '#D59C10',
-                  border: 'none', borderRadius: 50,
-                  fontSize: 15, fontWeight: 700,
-                  color: '#1A1D21', cursor: loading ? 'not-allowed' : 'pointer',
-                  fontFamily: 'DM Sans, sans-serif',
-                  transition: 'background 0.2s',
-                }}
-              >
+              {error && (
+                <div style={{
+                  background: 'rgba(220,38,38,0.08)',
+                  border: '1px solid rgba(220,38,38,0.3)',
+                  borderRadius: 10, padding: '10px 14px',
+                  color: '#F87171', fontSize: 13, marginBottom: 16,
+                }}>
+                  {error}
+                </div>
+              )}
+
+              <button type="submit" disabled={loading} style={{ width: '100%', height: 50, background: loading ? '#A37808' : '#D59C10', border: 'none', borderRadius: 50, fontSize: 15, fontWeight: 700, color: '#1A1D21', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'background 0.2s' }}>
                 {loading ? 'Signing in...' : 'Sign in'}
               </button>
+
+
             </form>
 
             {/* Divider */}

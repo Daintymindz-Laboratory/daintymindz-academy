@@ -8,11 +8,32 @@ export default function SignUp() {
   const [password, setPassword] = useState('');
   const [track, setTrack] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!track) { setError('Please select a track.'); return; }
     setLoading(true);
-    setTimeout(() => setLoading(false), 1500);
+    setError('');
+    try {
+      const { createClient } = await import('@/lib/supabase');
+      const supabase = createClient();
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+            track,
+          }
+        }
+      });
+      if (error) { setError(error.message); setLoading(false); return; }
+      window.location.href = '/dashboard';
+    } catch (err) {
+      setError('Something went wrong. Please try again.');
+      setLoading(false);
+    }
   };
 
   const tracks = [
@@ -279,22 +300,24 @@ export default function SignUp() {
                 </div>
               </div>
 
+              {/* Error */}
+              {error && (
+                <div style={{
+                  background: 'rgba(220,38,38,0.08)',
+                  border: '1px solid rgba(220,38,38,0.3)',
+                  borderRadius: 10, padding: '10px 14px',
+                  color: '#F87171', fontSize: 13, marginBottom: 16,
+                }}>
+                  {error}
+                </div>
+              )}
+
               {/* Submit */}
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  width: '100%', height: 50,
-                  background: loading ? '#A37808' : '#D59C10',
-                  border: 'none', borderRadius: 50,
-                  fontSize: 15, fontWeight: 700,
-                  color: '#1A1D21', cursor: loading ? 'not-allowed' : 'pointer',
-                  fontFamily: 'DM Sans, sans-serif',
-                  transition: 'background 0.2s',
-                }}
-              >
+
+              <button type="submit" disabled={loading} style={{ width: '100%', height: 50, background: loading ? '#A37808' : '#D59C10', border: 'none', borderRadius: 50, fontSize: 15, fontWeight: 700, color: '#1A1D21', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'background 0.2s' }}>
                 {loading ? 'Creating account...' : 'Create account'}
               </button>
+
             </form>
 
             <p style={{ textAlign: 'center', fontSize: 13, color: '#3A3F46', marginTop: 20 }}>

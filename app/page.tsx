@@ -165,13 +165,12 @@ export default function Home() {
             color: '#F5F5F5', padding: '9px 22px', fontSize: 14, fontWeight: 500,
             cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
             borderRadius: 50,
-          }}>Sign in</button>
+          }} onClick={() => window.location.href='/signin'}>Sign in</button>
           <button style={{
             background: '#D59C10', border: 'none',
             color: '#1A1D21', padding: '9px 22px', fontSize: 14, fontWeight: 700,
-            cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-            borderRadius: 50,
-          }}>Get started</button>
+            cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', borderRadius: 50,
+          }} onClick={() => window.location.href='/signup'}>Get started</button>
         </div>
       </nav>
 
@@ -215,13 +214,13 @@ export default function Home() {
               color: '#1A1D21', padding: '13px 30px',
               fontSize: 15, fontWeight: 700, cursor: 'pointer',
               fontFamily: 'DM Sans, sans-serif', borderRadius: 50,
-            }}>Start learning</button>
+            }} onClick={() => window.location.href='/signup'}>Start learning</button>
             <button style={{
               background: 'transparent', border: '1px solid #3A3F46',
               color: '#F5F5F5', padding: '13px 30px',
               fontSize: 15, fontWeight: 500, cursor: 'pointer',
               fontFamily: 'DM Sans, sans-serif', borderRadius: 50,
-            }}>Browse courses</button>
+            }} onClick={() => window.location.href='/catalog'}>Browse courses</button>
           </div>
 
           {/* Stats */}

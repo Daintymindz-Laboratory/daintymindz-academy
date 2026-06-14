@@ -1,6 +1,6 @@
 'use client';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const TRACKS = {
   AI: { label: 'Artificial Intelligence', color: '#D59C10', glow: 'rgba(213,156,16,0.15)' },
@@ -25,7 +25,7 @@ const ALL_COURSES = [
   { id: 13, title: 'MLOps & Pipeline Engineering', track: 'DO', level: 'Advanced', lessons: 7, progress: 0, enrolled: false },
 ];
 
-const USER = { name: 'Gloria Njoku', track: 'AI', streak: 4, certsEarned: 0 };
+type UserProfile = { name: string; track: string; streak: number; certsEarned: number; };
 
 const levelColors: Record<string, { bg: string; color: string }> = {
   Beginner: { bg: 'rgba(76,175,125,0.12)', color: '#4CAF7D' },
@@ -137,16 +137,50 @@ function CourseCard({ course, recommended = false }: { course: typeof ALL_COURSE
 }
 
 export default function Dashboard() {
+
+  const [user, setUser] = useState<UserProfile>({ name: '', track: 'AI', streak: 0, certsEarned: 0 });
+  const [userLoading, setUserLoading] = useState(true);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      const { createClient } = await import('@/lib/supabase');
+      const supabase = createClient();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) { window.location.href = '/signin'; return; }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+      if (profile) {
+        setUser({
+          name: profile.full_name || authUser.email || 'Student',
+          track: profile.track || 'AI',
+          streak: 0,
+          certsEarned: 0,
+        });
+      }
+      setUserLoading(false);
+    };
+    loadUser();
+  }, []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTrack, setActiveTrack] = useState('All');
-  const userTrack = USER.track as keyof typeof TRACKS;
-
+  const userTrack = user.track as keyof typeof TRACKS;
   const inProgress = ALL_COURSES.filter(c => c.enrolled && c.progress > 0);
   const recommended = ALL_COURSES.filter(c => c.track === userTrack && !c.enrolled);
   const explore = ALL_COURSES.filter(c => c.track !== userTrack && !c.enrolled);
   const completedCount = ALL_COURSES.filter(c => c.progress === 100).length;
 
-  return (
+   if (userLoading) return (
+    <div style={{ background: '#1A1D21', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ fontFamily: 'JetBrains Mono, monospace', color: '#D59C10', fontSize: 13, letterSpacing: '0.1em' }}>
+        Loading...
+      </div>
+    </div>
+  );
+    
+    return (
     <div style={{ background: '#1A1D21', minHeight: '100vh', fontFamily: 'DM Sans, sans-serif', display: 'flex', flexDirection: 'column' }}>
 
       {/* TOP NAV */}
@@ -191,7 +225,7 @@ export default function Dashboard() {
           borderRadius: 50, padding: '6px 14px',
         }}>
           <span style={{ fontSize: 14 }}>🔥</span>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#D59C10' }}>{USER.streak} day streak</span>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#D59C10' }}>{user.streak} day streak</span>
         </div>
 
         {/* Avatar */}
@@ -201,7 +235,7 @@ export default function Dashboard() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0,
         }}>
-          {USER.name.split(' ').map(n => n[0]).join('')}
+          {user.name.split(' ').map(n => n[0]).join('')}
         </div>
       </nav>
 
@@ -290,10 +324,10 @@ export default function Dashboard() {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontWeight: 700, fontSize: 11, flexShrink: 0,
                   }}>
-                    {USER.name.split(' ').map(n => n[0]).join('')}
+                    {user.name.split(' ').map(n => n[0]).join('')}
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5' }}>{USER.name}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5' }}>{user.name}</div>
                     <div style={{ fontSize: 11, color: TRACKS[userTrack].color, fontFamily: 'JetBrains Mono, monospace' }}>{userTrack} track</div>
                   </div>
                 </div>
@@ -328,7 +362,7 @@ export default function Dashboard() {
               fontSize: 28, fontWeight: 700, color: '#F5F5F5',
               letterSpacing: '-0.02em', marginBottom: 6,
             }}>
-              Welcome back, {USER.name.split(' ')[0]} 👋
+              Welcome back, {user.name.split(' ')[0]} 👋
             </h1>
             <p style={{ fontSize: 14, color: '#6B7280' }}>
               You are on the {TRACKS[userTrack].label} track. Keep going.
@@ -340,8 +374,8 @@ export default function Dashboard() {
             {[
               { label: 'Enrolled', val: ALL_COURSES.filter(c => c.enrolled).length, unit: 'courses', color: '#D59C10' },
               { label: 'Completed', val: completedCount, unit: 'courses', color: '#4CAF7D' },
-              { label: 'Certificates', val: USER.certsEarned, unit: 'earned', color: '#4E8FD4' },
-              { label: 'Streak', val: USER.streak, unit: 'days', color: '#9B6FD4' },
+              { label: 'Certificates', val: user.certsEarned, unit: 'earned', color: '#4E8FD4' },
+              { label: 'Streak', val: user.streak, unit: 'days', color: '#9B6FD4' },
             ].map(s => (
               <div key={s.label} style={{
                 background: '#22262B', border: '1px solid #2A2F35',
