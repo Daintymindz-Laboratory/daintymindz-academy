@@ -42,7 +42,7 @@ function ProgressRing({ progress, size = 48, color = '#D59C10' }: { progress: nu
   );
 }
 
-function CourseCard({ course, recommended = false }: { course: typeof ALL_COURSES[0]; recommended?: boolean }) {
+function CourseCard({ course, recommended = false }: { course: Course; recommended?: boolean }) {
   const track = TRACKS[course.track as keyof typeof TRACKS];
   const level = levelColors[course.level];
   const [enrolled, setEnrolled] = useState(course.enrolled);
