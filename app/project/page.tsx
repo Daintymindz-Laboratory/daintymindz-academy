@@ -157,7 +157,7 @@ export default function ProjectPage() {
         </div>
 
         <div style={{
-          fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#6B7280',
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
           background: 'rgba(155,111,212,0.1)',
           border: '1px solid rgba(155,111,212,0.2)',
           borderRadius: 20, padding: '4px 12px',
