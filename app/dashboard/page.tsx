@@ -9,21 +9,17 @@ const TRACKS = {
   DO: { label: 'Data Operations', color: '#9B6FD4', glow: 'rgba(155,111,212,0.15)' },
 };
 
-const ALL_COURSES = [
-  { id: 1, title: 'Intro to Machine Learning', track: 'AI', level: 'Beginner', lessons: 5, progress: 40, enrolled: true },
-  { id: 2, title: 'Computer Vision with OpenCV', track: 'AI', level: 'Intermediate', lessons: 6, progress: 0, enrolled: false },
-  { id: 3, title: 'Natural Language Processing', track: 'AI', level: 'Intermediate', lessons: 7, progress: 0, enrolled: false },
-  { id: 4, title: 'Model Deployment with FastAPI', track: 'AI', level: 'Advanced', lessons: 6, progress: 0, enrolled: false },
-  { id: 5, title: 'Python for Data Science', track: 'DS', level: 'Beginner', lessons: 5, progress: 60, enrolled: true },
-  { id: 6, title: 'Statistics & Probability for AI', track: 'DS', level: 'Intermediate', lessons: 6, progress: 0, enrolled: false },
-  { id: 7, title: 'Data Visualization & Dashboards', track: 'DS', level: 'Advanced', lessons: 5, progress: 0, enrolled: false },
-  { id: 8, title: 'Python Programming Fundamentals', track: 'SE', level: 'Beginner', lessons: 6, progress: 0, enrolled: false },
-  { id: 9, title: 'REST APIs & System Design', track: 'SE', level: 'Intermediate', lessons: 6, progress: 0, enrolled: false },
-  { id: 10, title: 'Git & Developer Workflow', track: 'SE', level: 'Beginner', lessons: 4, progress: 0, enrolled: false },
-  { id: 11, title: 'Data Collection & Web Scraping', track: 'DO', level: 'Beginner', lessons: 5, progress: 20, enrolled: true },
-  { id: 12, title: 'Data Annotation & Labeling', track: 'DO', level: 'Intermediate', lessons: 5, progress: 0, enrolled: false },
-  { id: 13, title: 'MLOps & Pipeline Engineering', track: 'DO', level: 'Advanced', lessons: 7, progress: 0, enrolled: false },
-];
+type Course = {
+  id: number;
+  title: string;
+  track: string;
+  level: string;
+  lessons_count: number;
+  duration: string;
+  description: string;
+  progress: number;
+  enrolled: boolean;
+};
 
 type UserProfile = { name: string; track: string; streak: number; certsEarned: number; };
 
@@ -102,7 +98,7 @@ function CourseCard({ course, recommended = false }: { course: typeof ALL_COURSE
           {course.title}
         </div>
         <div style={{ fontSize: 12, color: '#6B7280' }}>
-          {course.lessons} lessons · {track.label}
+          {course.lessons_count} lessons · {track.label}
         </div>
       </div>
 
@@ -141,17 +137,17 @@ export default function Dashboard() {
   const [user, setUser] = useState<UserProfile>({ name: '', track: 'AI', streak: 0, certsEarned: 0 });
   const [userLoading, setUserLoading] = useState(true);
 
+  const [allCourses, setAllCourses] = useState<Course[]>([]);
+
   useEffect(() => {
     const loadUser = async () => {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) { window.location.href = '/signin'; return; }
+
       const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
+        .from('profiles').select('*').eq('id', authUser.id).single();
       if (profile) {
         setUser({
           name: profile.full_name || authUser.email || 'Student',
@@ -160,19 +156,37 @@ export default function Dashboard() {
           certsEarned: 0,
         });
       }
+
+      const { data: courses } = await supabase.from('courses').select('*').order('id');
+      const { data: enrollments } = await supabase.from('enrollments').select('course_id').eq('user_id', authUser.id);
+      const { data: progressData } = await supabase.from('progress').select('*').eq('user_id', authUser.id);
+
+      const enrolledIds = enrollments?.map((e: any) => e.course_id) || [];
+      const progressMap = Object.fromEntries((progressData || []).map((p: any) => [p.course_id, p.percentage]));
+
+      if (courses) {
+        setAllCourses(courses.map((c: any) => ({
+          ...c,
+          lessons: c.lessons_count,
+          enrolled: enrolledIds.includes(c.id),
+          progress: progressMap[c.id] || 0,
+        })));
+      }
+
       setUserLoading(false);
     };
     loadUser();
   }, []);
+
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTrack, setActiveTrack] = useState('All');
   const userTrack = user.track as keyof typeof TRACKS;
-  const inProgress = ALL_COURSES.filter(c => c.enrolled && c.progress > 0);
-  const recommended = ALL_COURSES.filter(c => c.track === userTrack && !c.enrolled);
-  const explore = ALL_COURSES.filter(c => c.track !== userTrack && !c.enrolled);
-  const completedCount = ALL_COURSES.filter(c => c.progress === 100).length;
-
-   if (userLoading) return (
+  const recommended = allCourses.filter(c => c.track === userTrack && !c.enrolled);
+  const explore = allCourses.filter(c => c.track !== userTrack && !c.enrolled && (activeTrack === 'All' || c.track === activeTrack));
+  const completedCount = allCourses.filter(c => c.progress === 100).length;
+  
+  if (userLoading) return (
     <div style={{ background: '#1A1D21', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ fontFamily: 'JetBrains Mono, monospace', color: '#D59C10', fontSize: 13, letterSpacing: '0.1em' }}>
         Loading...
@@ -254,11 +268,11 @@ export default function Dashboard() {
               <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>
                 Navigation
               </div>
-              {[
+              {[              
                 { icon: '⊞', label: 'Dashboard', active: true, href: '/dashboard' },
-                { icon: '◎', label: 'My Courses', active: false, href: '/dashboard' },
-                { icon: '✦', label: 'Catalog', active: false, href: '/dashboard' },
-                { icon: '◈', label: 'Certificates', active: false, href: '/dashboard' },
+                { icon: '◎', label: 'My Courses', active: false, href: '/catalog' },
+                { icon: '✦', label: 'Catalog', active: false, href: '/catalog' },
+                { icon: '◈', label: 'Certificates', active: false, href: '/certificates' },
               ].map(item => (
                 <a key={item.label} href={item.href} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -331,12 +345,18 @@ export default function Dashboard() {
                     <div style={{ fontSize: 11, color: TRACKS[userTrack].color, fontFamily: 'JetBrains Mono, monospace' }}>{userTrack} track</div>
                   </div>
                 </div>
-                <a href="/signin" style={{
-                  display: 'block', textAlign: 'center',
+                <button onClick={async () => {
+                  const { createClient } = await import('@/lib/supabase');
+                  const supabase = createClient();
+                  await supabase.auth.signOut();
+                  window.location.href = '/';
+                }} style={{
+                  display: 'block', width: '100%', textAlign: 'center',
                   padding: '7px 0', borderRadius: 50,
                   border: '1px solid #3A3F46', color: '#6B7280',
-                  fontSize: 12, textDecoration: 'none',
-                }}>Sign out</a>
+                  fontSize: 12, background: 'none', cursor: 'pointer',
+                  fontFamily: 'DM Sans, sans-serif',
+                }}>Sign out</button>
               </div>
             </div>
           </aside>
@@ -372,7 +392,7 @@ export default function Dashboard() {
           {/* Stats row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: '2.5rem' }}>
             {[
-              { label: 'Enrolled', val: ALL_COURSES.filter(c => c.enrolled).length, unit: 'courses', color: '#D59C10' },
+              { label: 'Enrolled', val: allCourses.filter(c => c.enrolled).length, unit: 'courses', color: '#D59C10' },
               { label: 'Completed', val: completedCount, unit: 'courses', color: '#4CAF7D' },
               { label: 'Certificates', val: user.certsEarned, unit: 'earned', color: '#4E8FD4' },
               { label: 'Streak', val: user.streak, unit: 'days', color: '#9B6FD4' },
@@ -391,14 +411,14 @@ export default function Dashboard() {
           </div>
 
           {/* Continue learning */}
-          {inProgress.length > 0 && (
+          {allCourses.filter(c => c.enrolled).length > 0 && (
             <div style={{ marginBottom: '2.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>Continue learning</h2>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>{inProgress.length} IN PROGRESS</span>
+                <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>My Courses</h2>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>{allCourses.filter(c => c.enrolled).length} ENROLLED</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-                {inProgress.map(c => (
+                {allCourses.filter(c => c.enrolled).map(c => (
                   <div key={c.id} style={{
                     background: '#22262B', border: '1px solid #2A2F35',
                     borderRadius: 20, padding: '20px 22px',
