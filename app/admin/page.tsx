@@ -31,6 +31,7 @@ type Lesson = {
   content: string;
   code: string;
   code_label: string;
+  language: string;
   starter_code: string;
   instructions: string;
   video_url: string;
@@ -171,6 +172,7 @@ export default function AdminPage() {
         content: editingLesson.content,
         code: editingLesson.code,
         code_label: editingLesson.code_label,
+        language: editingLesson.language,
         starter_code: editingLesson.starter_code,
         instructions: editingLesson.instructions,
         video_url: editingLesson.video_url,
@@ -186,6 +188,7 @@ export default function AdminPage() {
         content: editingLesson.content,
         code: editingLesson.code,
         code_label: editingLesson.code_label,
+        language: editingLesson.language,
         starter_code: editingLesson.starter_code,
         instructions: editingLesson.instructions,
         video_url: editingLesson.video_url,
@@ -456,6 +459,7 @@ export default function AdminPage() {
                         course_id: selectedCourse.id!,
                         title: '', type: 'lesson',
                         content: '', code: '', code_label: 'example.py',
+                        language: 'python',
                         starter_code: '', instructions: '',
                         video_url: '',
                         order_index: lessons.length + 1,
@@ -506,7 +510,7 @@ export default function AdminPage() {
 
                         {/* Video URL — all lesson types */}
                         <div>
-                          <label style={labelStyle}>Video URL — YouTube or Loom (optional)</label>
+                          <label style={labelStyle}>Video URL, YouTube or Loom (optional)</label>
                           <input style={inputStyle} value={editingLesson.video_url}
                             onChange={e => setEditingLesson(p => p ? ({ ...p, video_url: e.target.value }) : p)}
                             placeholder="https://www.youtube.com/watch?v=... or https://www.loom.com/share/..." />
@@ -519,7 +523,7 @@ export default function AdminPage() {
                         {editingLesson.type === 'lesson' && (
                           <>
                             <div data-color-mode="dark">
-                              <label style={{ ...labelStyle, marginBottom: 10 }}>Lesson Content — Markdown supported</label>
+                              <label style={{ ...labelStyle, marginBottom: 10 }}>Lesson Content, Markdown supported</label>
                               <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 8, fontFamily: 'JetBrains Mono, monospace' }}>
                                 Use # for headings · **bold** · *italic* · - for lists · {'>'} for quotes · ```python for code blocks
                               </div>
@@ -539,11 +543,33 @@ export default function AdminPage() {
                                   rows={10}
                                   style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, lineHeight: 1.7, fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }} />
                               </div>
-                              <div>
-                                <label style={labelStyle}>File Label</label>
-                                <input style={inputStyle} value={editingLesson.code_label}
-                                  onChange={e => setEditingLesson(p => p ? ({ ...p, code_label: e.target.value }) : p)}
-                                  placeholder="example.py" />
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                <div>
+                                  <label style={labelStyle}>Language</label>
+                                  <select style={{ ...inputStyle, cursor: 'pointer' }} value={editingLesson.language}
+                                    onChange={e => setEditingLesson(p => p ? ({ ...p, language: e.target.value }) : p)}>
+                                    <option value="python">Python</option>
+                                    <option value="javascript">JavaScript</option>
+                                    <option value="typescript">TypeScript</option>
+                                    <option value="jsx">React / JSX</option>
+                                    <option value="html">HTML</option>
+                                    <option value="css">CSS</option>
+                                    <option value="c">C</option>
+                                    <option value="cpp">C++</option>
+                                    <option value="csharp">C#</option>
+                                    <option value="java">Java</option>
+                                    <option value="r">R</option>
+                                    <option value="sql">SQL</option>
+                                    <option value="bash">Bash / Shell</option>
+                                    <option value="latex">LaTeX</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label style={labelStyle}>File Label</label>
+                                  <input style={inputStyle} value={editingLesson.code_label}
+                                    onChange={e => setEditingLesson(p => p ? ({ ...p, code_label: e.target.value }) : p)}
+                                    placeholder="example.py" />
+                                </div>
                               </div>
                             </div>
                           </>
@@ -552,8 +578,28 @@ export default function AdminPage() {
                         {/* PROJECT type fields */}
                         {editingLesson.type === 'project' && (
                           <>
+                            <div>
+                              <label style={labelStyle}>Programming Language</label>
+                              <select style={{ ...inputStyle, cursor: 'pointer' }} value={editingLesson.language}
+                                onChange={e => setEditingLesson(p => p ? ({ ...p, language: e.target.value }) : p)}>
+                                <option value="python">Python</option>
+                                <option value="javascript">JavaScript</option>
+                                <option value="typescript">TypeScript</option>
+                                <option value="jsx">React / JSX</option>
+                                <option value="html">HTML</option>
+                                <option value="css">CSS</option>
+                                <option value="c">C</option>
+                                <option value="cpp">C++</option>
+                                <option value="csharp">C#</option>
+                                <option value="java">Java</option>
+                                <option value="r">R</option>
+                                <option value="sql">SQL</option>
+                                <option value="bash">Bash / Shell</option>
+                                <option value="latex">LaTeX</option>
+                              </select>
+                            </div>
                             <div data-color-mode="dark">
-                              <label style={{ ...labelStyle, marginBottom: 10 }}>Project Instructions — Markdown supported</label>
+                              <label style={{ ...labelStyle, marginBottom: 10 }}>Project Instructions, Markdown supported</label>
                               <MDEditor
                                 value={editingLesson.instructions}
                                 onChange={val => setEditingLesson(p => p ? ({ ...p, instructions: val || '' }) : p)}
@@ -575,7 +621,7 @@ export default function AdminPage() {
                         {/* ASSESSMENT type fields */}
                         {editingLesson.type === 'assessment' && (
                           <div data-color-mode="dark">
-                            <label style={{ ...labelStyle, marginBottom: 10 }}>Assessment Content — Markdown supported</label>
+                            <label style={{ ...labelStyle, marginBottom: 10 }}>Assessment Content, Markdown supported</label>
                             <MDEditor
                               value={editingLesson.content}
                               onChange={val => setEditingLesson(p => p ? ({ ...p, content: val || '' }) : p)}
@@ -601,7 +647,7 @@ export default function AdminPage() {
                             }} />
                           </div>
                           <span style={{ fontSize: 13, color: '#6B7280' }}>
-                            {editingLesson.is_published ? 'Published — visible to students' : 'Draft — not visible to students'}
+                            {editingLesson.is_published ? 'Published, visible to students' : 'Draft, not visible to students'}
                           </span>
                         </div>
                       </div>
