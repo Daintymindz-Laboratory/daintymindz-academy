@@ -313,7 +313,7 @@ export default function Catalog() {
                       </span>
                     </div>
 
-                    <button onClick={() => enrollInCourse(course.id)} style={{
+                    <button onClick={() => isEnrolled ? window.location.href = `/lesson/${course.id}/1` : enrollInCourse(course.id)} style={{
                       padding: '10px 0', borderRadius: 50,
                       background: isEnrolled ? 'rgba(213,156,16,0.08)' : '#D59C10',
                       border: isEnrolled ? '1px solid rgba(213,156,16,0.3)' : 'none',
