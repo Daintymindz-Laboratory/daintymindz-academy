@@ -21,20 +21,23 @@ const TRACKS: Record<string, { label: string; color: string }> = {
 const printStyles = `
   @media print {
     @page { size: landscape; margin: 0; }
+    html { height: 100vh; }
+    body { height: 100vh; overflow: hidden; margin: 0; padding: 0; }
     body * { visibility: hidden; }
     #certificate {
-      visibility: visible;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      box-shadow: none;
-      margin: 0;
-      padding: 40px 60px;
-      box-sizing: border-box;
+      visibility: visible !important;
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: none !important;
+      box-shadow: none !important;
+      margin: 0 !important;
+      padding: 30px 80px !important;
+      box-sizing: border-box !important;
     }
-    #certificate * { visibility: visible; }
+    #certificate * { visibility: visible !important; }
   }
 `;
 
@@ -154,8 +157,8 @@ export default function CertificateViewPage() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '3rem', overflowY: 'auto', borderRight: '1px solid #2A2F35',
         }}>
-         <div id="certificate" style={{
-            width: 740, maxWidth: '100%', background: '#FFFFFF',
+          <div id="certificate" style={{
+            width: 740, background: '#FFFFFF',
             padding: '52px 60px', position: 'relative',
             boxShadow: '0 24px 80px rgba(0,0,0,0.4)',
           }}>
@@ -215,7 +218,6 @@ export default function CertificateViewPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, alignItems: 'end' }}>
 
-                {/* Signature */}
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 22, color: '#33383D', marginBottom: 4 }}>
                     Judith Vowels
@@ -226,7 +228,6 @@ export default function CertificateViewPage() {
                   <div style={{ fontSize: 10, color: '#9CA3AF' }}>Daintymindz Academy</div>
                 </div>
 
-                {/* Seal */}
                 <div style={{ textAlign: 'center' }}>
                   {sealUrl ? (
                     <img src={sealUrl} alt="Seal" style={{ width: 80, height: 80, objectFit: 'contain', margin: '0 auto 6px', display: 'block' }} />
@@ -243,7 +244,6 @@ export default function CertificateViewPage() {
                   <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 8, color: '#9CA3AF', letterSpacing: '0.06em' }}>{cert.cert_id}</div>
                 </div>
 
-                {/* Date + QR */}
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
                     <QRCode value={verifyUrl} size={64} level="M" includeMargin={false} />
