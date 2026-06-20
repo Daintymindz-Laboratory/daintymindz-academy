@@ -312,9 +312,7 @@ export default function LessonPage() {
         {/* Mobile backdrop */}
         <div className={`dm-sidebar-backdrop${sidebarOpen ? ' open' : ''}`} onClick={() => setSidebarOpen(false)} />
         {/* LESSON SIDEBAR */}
-        <aside className={`dm-sidebar${sidebarOpen ? ' open' : ''}`} style={{
-          width: 260, top: 56, display: 'flex', flexDirection: 'column',
-        }}>
+        <aside className={`dm-lesson-sidebar${sidebarOpen ? ' open' : ''}`}>
             <div style={{ padding: '1.25rem 1rem 0.75rem', borderBottom: '1px solid #2A2F35' }}>
               <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 6 }}>Course content</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5', lineHeight: 1.3 }}>{course?.title}</div>

@@ -80,6 +80,24 @@ code, pre { font-family: 'JetBrains Mono', monospace; }
   .dm-grid-4 { grid-template-columns: 1fr !important; }
 }
 
+/* Lesson sidebar: in-flow on desktop, fixed overlay on mobile */
+.dm-lesson-sidebar {
+  width: 260px; flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--graphite-card);
+  background: var(--graphite-bg);
+  display: flex; flex-direction: column;
+  transition: transform 0.25s ease;
+}
+@media (max-width: 768px) {
+  .dm-lesson-sidebar {
+    position: fixed; top: 56px; bottom: 0; left: 0; z-index: 40;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+  .dm-lesson-sidebar.open { transform: translateX(0); }
+}
+
 /* Lesson split pane */
 .lesson-split { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; flex: 1; }
 @media (max-width: 768px) {
