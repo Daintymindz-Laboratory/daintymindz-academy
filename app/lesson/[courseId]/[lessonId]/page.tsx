@@ -78,31 +78,36 @@ export default function LessonPage() {
       if (profile) setUserName(profile.full_name);
       setUserId(user.id);
 
-      const { data: courseData } = await supabase
+      const { data: courseData, error: courseError } = await supabase
         .from('courses').select('*').eq('id', courseId).single();
+      if (courseError) { console.error('Course fetch error:', courseError); window.location.href = '/dashboard'; return; }
       if (courseData) setCourse(courseData);
 
-      const { data: lessonsData } = await supabase
+      const { data: lessonsData, error: lessonsError } = await supabase
         .from('lessons').select('*')
         .eq('course_id', courseId)
         .eq('is_published', true)
         .order('order_index');
-      if (lessonsData) {
-        setLessons(lessonsData);
-        const target = lessonId === '1'
-          ? lessonsData[0]
-          : lessonsData.find((l: Lesson) => l.id === parseInt(lessonId)) || lessonsData[0];
-        if (target) {
-          setCurrentLesson(target);
-          setCode(target.starter_code || target.code || '');
-        }
+      if (lessonsError) console.error('Lessons fetch error:', lessonsError);
+      if (!lessonsData || lessonsData.length === 0) {
+        setLoading(false);
+        return;
+      }
+      setLessons(lessonsData);
+      const target = lessonId === '1'
+        ? lessonsData[0]
+        : (lessonsData.find((l: Lesson) => l.id === parseInt(lessonId)) || lessonsData[0]);
+      if (target) {
+        setCurrentLesson(target);
+        setCode(target.starter_code || target.code || '');
       }
 
-      const { data: progressData } = await supabase
+      const { data: progressData, error: progressError } = await supabase
         .from('progress').select('completed_lessons')
         .eq('user_id', user.id)
         .eq('course_id', courseId)
-        .single();
+        .maybeSingle();
+      if (progressError) console.error('Progress fetch error:', progressError);
       if (progressData?.completed_lessons) {
         setCompletedIds(progressData.completed_lessons);
       }
@@ -150,37 +155,41 @@ export default function LessonPage() {
     const supabase = createClient();
     const percentage = Math.round((newCompleted.length / lessons.length) * 100);
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('progress').select('id')
-      .eq('user_id', userId).eq('course_id', courseId).single();
+      .eq('user_id', userId).eq('course_id', courseId).maybeSingle();
+    if (existingError) console.error('Progress check error:', existingError);
 
     if (existing) {
-      await supabase.from('progress').update({
+      const { error: updateError } = await supabase.from('progress').update({
         completed_lessons: newCompleted,
         percentage,
+        lesson_index: currentLesson.order_index,
         last_accessed: new Date().toISOString(),
       }).eq('user_id', userId).eq('course_id', courseId);
+      if (updateError) console.error('Progress update error:', updateError);
     } else {
-      await supabase.from('progress').insert({
+      const { error: insertError } = await supabase.from('progress').insert({
         user_id: userId,
         course_id: parseInt(courseId),
         completed_lessons: newCompleted,
         percentage,
         lesson_index: currentLesson.order_index,
       });
+      if (insertError) console.error('Progress insert error:', insertError);
     }
 
     // If course complete, generate certificate
     if (newCompleted.length === lessons.length) {
       const certId = `CERT-DM-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-      await supabase.from('certificates').insert({
+      const { error: certError } = await supabase.from('certificates').insert({
         user_id: userId,
         course_id: parseInt(courseId),
         cert_id: certId,
       });
+      if (certError) console.error('Certificate insert error:', certError);
       window.location.href = `/certificates`;
     } else {
-      const nextLesson = lessons.find(l => l.order_index === currentLesson.order_index + 1);
       if (nextLesson) switchLesson(nextLesson);
     }
   };
@@ -338,7 +347,7 @@ export default function LessonPage() {
         {/* SPLIT SCREEN */}
         <div style={{ flex: 1, display: 'grid', gridTemplateColumns: currentLesson.type === 'project' ? '1fr 1fr' : '1fr 1fr', overflow: 'hidden' }}>
 
-          {/* LEFT — Content */}
+          {/* LEFT: Content */}
           <div style={{ borderRight: '1px solid #2A2F35', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
 
             {/* Project tabs */}
@@ -545,7 +554,7 @@ export default function LessonPage() {
             </div>
           </div>
 
-          {/* RIGHT — Code or Monaco */}
+          {/* RIGHT: Code or Monaco */}
           <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',

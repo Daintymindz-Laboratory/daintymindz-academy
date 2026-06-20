@@ -20,24 +20,22 @@ const TRACKS: Record<string, { label: string; color: string }> = {
 
 const printStyles = `
   @media print {
-    @page { size: landscape; margin: 0; }
-    html { height: 100vh; }
-    body { height: 100vh; overflow: hidden; margin: 0; padding: 0; }
-    body * { visibility: hidden; }
+    @page { size: A4 landscape; margin: 0; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+    body * { visibility: hidden !important; }
+    #certificate, #certificate * { visibility: visible !important; }
     #certificate {
-      visibility: visible !important;
       position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
+      top: 0 !important; left: 0 !important;
+      width: 100vw !important; height: 100vh !important;
       max-width: none !important;
       box-shadow: none !important;
       margin: 0 !important;
-      padding: 30px 80px !important;
+      padding: 24px 60px !important;
       box-sizing: border-box !important;
+      page-break-after: avoid !important;
+      page-break-inside: avoid !important;
     }
-    #certificate * { visibility: visible !important; }
   }
 `;
 

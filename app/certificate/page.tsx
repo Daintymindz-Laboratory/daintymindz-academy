@@ -84,7 +84,7 @@ export default function CertificatePage() {
         overflow: 'hidden',
       }}>
 
-        {/* LEFT — Certificate preview */}
+        {/* LEFT: Certificate preview */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '3rem', overflowY: 'auto',
@@ -287,7 +287,7 @@ export default function CertificatePage() {
           </div>
         </div>
 
-        {/* RIGHT — Details panel */}
+        {/* RIGHT: Details panel */}
         <div style={{
           padding: '2rem 1.5rem',
           overflowY: 'auto',

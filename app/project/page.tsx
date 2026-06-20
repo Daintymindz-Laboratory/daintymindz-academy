@@ -175,7 +175,7 @@ export default function ProjectPage() {
       {/* BODY */}
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', overflow: 'hidden' }}>
 
-        {/* LEFT — Instructions */}
+        {/* LEFT: Instructions */}
         <div style={{
           borderRight: '1px solid #2A2F35',
           display: 'flex', flexDirection: 'column',
@@ -343,7 +343,7 @@ Best model: Decision Tree (100.00%)`}</pre>
           </div>
         </div>
 
-        {/* RIGHT — Monaco Editor */}
+        {/* RIGHT: Monaco Editor */}
         <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* Editor header */}
           <div style={{

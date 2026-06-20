@@ -21,7 +21,7 @@ type Course = {
   enrolled: boolean;
 };
 
-type UserProfile = { name: string; track: string; streak: number; certsEarned: number; };
+type UserProfile = { name: string; track: string; streak: number; certsEarned: number; isAdmin: boolean; };
 
 const levelColors: Record<string, { bg: string; color: string }> = {
   Beginner: { bg: 'rgba(76,175,125,0.12)', color: '#4CAF7D' },
@@ -42,7 +42,7 @@ function ProgressRing({ progress, size = 48, color = '#D59C10' }: { progress: nu
   );
 }
 
-function CourseCard({ course, recommended = false }: { course: Course; recommended?: boolean }) {
+function CourseCard({ course, recommended = false, onEnroll }: { course: Course; recommended?: boolean; onEnroll?: (id: number) => void }) {
   const track = TRACKS[course.track as keyof typeof TRACKS];
   const level = levelColors[course.level];
   const [enrolled, setEnrolled] = useState(course.enrolled);
@@ -115,7 +115,20 @@ function CourseCard({ course, recommended = false }: { course: Course; recommend
       )}
 
       <button
-        onClick={() => setEnrolled(true)}
+        onClick={async () => {
+          if (enrolled) {
+            window.location.href = `/lesson/${course.id}/1`;
+          } else {
+            const { createClient } = await import('@/lib/supabase');
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+              await supabase.from('enrollments').insert({ user_id: user.id, course_id: course.id });
+              setEnrolled(true);
+              if (onEnroll) onEnroll(course.id);
+            }
+          }
+        }}
         style={{
           marginTop: 4, padding: '9px 0',
           background: enrolled ? 'rgba(213,156,16,0.08)' : '#D59C10',
@@ -134,7 +147,8 @@ function CourseCard({ course, recommended = false }: { course: Course; recommend
 
 export default function Dashboard() {
 
-  const [user, setUser] = useState<UserProfile>({ name: '', track: 'AI', streak: 0, certsEarned: 0 });
+  const [user, setUser] = useState<UserProfile>({ name: '', track: 'AI', streak: 0, certsEarned: 0, isAdmin: false });
+  const [resumeMap, setResumeMap] = useState<Record<number, number>>({});
   const [userLoading, setUserLoading] = useState(true);
 
   const [allCourses, setAllCourses] = useState<Course[]>([]);
@@ -146,23 +160,55 @@ export default function Dashboard() {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) { window.location.href = '/signin'; return; }
 
-      const { data: profile } = await supabase
-        .from('profiles').select('*').eq('id', authUser.id).single();
+      const [
+        { data: profile, error: profileError },
+        { data: courses, error: coursesError },
+        { data: enrollments, error: enrollError },
+        { data: progressData, error: progressError },
+        { data: certsData },
+      ] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', authUser.id).single(),
+        supabase.from('courses').select('*').order('id'),
+        supabase.from('enrollments').select('course_id').eq('user_id', authUser.id),
+        supabase.from('progress').select('course_id, percentage, completed_lessons').eq('user_id', authUser.id),
+        supabase.from('certificates').select('id').eq('user_id', authUser.id),
+      ]);
+
+      if (profileError) console.error('Profile fetch error:', profileError);
+      if (coursesError) console.error('Courses fetch error:', coursesError);
+      if (enrollError) console.error('Enrollments fetch error:', enrollError);
+      if (progressError) console.error('Progress fetch error:', progressError);
+
+      const certsCount = certsData?.length || 0;
+
       if (profile) {
         setUser({
           name: profile.full_name || authUser.email || 'Student',
           track: profile.track || 'AI',
           streak: 0,
-          certsEarned: 0,
+          certsEarned: certsCount,
+          isAdmin: !!profile.is_admin,
         });
       }
 
-      const { data: courses } = await supabase.from('courses').select('*').order('id');
-      const { data: enrollments } = await supabase.from('enrollments').select('course_id').eq('user_id', authUser.id);
-      const { data: progressData } = await supabase.from('progress').select('*').eq('user_id', authUser.id);
-
       const enrolledIds = enrollments?.map((e: any) => e.course_id) || [];
       const progressMap = Object.fromEntries((progressData || []).map((p: any) => [p.course_id, p.percentage]));
+
+      // Build resume map: course_id -> next lesson ID
+      if (enrolledIds.length > 0) {
+        const { data: lessonsData } = await supabase.from('lessons').select('id, course_id, order_index')
+          .in('course_id', enrolledIds).eq('is_published', true).order('order_index');
+        const newResumeMap: Record<number, number> = {};
+        for (const courseId of enrolledIds) {
+          const prog = (progressData || []).find((p: any) => p.course_id === courseId);
+          const completedLessons: number[] = prog?.completed_lessons || [];
+          const courseLessons = (lessonsData || []).filter((l: any) => l.course_id === courseId);
+          const nextLesson = courseLessons.find((l: any) => !completedLessons.includes(l.id));
+          if (nextLesson) newResumeMap[courseId] = nextLesson.id;
+          else if (courseLessons[0]) newResumeMap[courseId] = courseLessons[0].id;
+        }
+        setResumeMap(newResumeMap);
+      }
 
       if (courses) {
         setAllCourses(courses.map((c: any) => ({
@@ -268,11 +314,12 @@ export default function Dashboard() {
               <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>
                 Navigation
               </div>
-              {[              
+              {[
                 { icon: '⊞', label: 'Dashboard', active: true, href: '/dashboard' },
                 { icon: '◎', label: 'My Courses', active: false, href: '/my-courses' },
                 { icon: '✦', label: 'Catalog', active: false, href: '/catalog' },
                 { icon: '◈', label: 'Certificates', active: false, href: '/certificates' },
+                ...(user.isAdmin ? [{ icon: '⚙', label: 'Admin Panel', active: false, href: '/admin' }] : []),
               ].map(item => (
                 <a key={item.label} href={item.href} style={{
                   display: 'flex', alignItems: 'center', gap: 10,
@@ -428,12 +475,18 @@ export default function Dashboard() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: '#F5F5F5', marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</div>
                       <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>{c.progress}% complete</div>
-                      <button style={{
-                        background: '#D59C10', border: 'none',
-                        borderRadius: 50, padding: '6px 16px',
-                        fontSize: 12, fontWeight: 700, color: '#1A1D21',
-                        cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-                      }}>Resume</button>
+                      <button
+                        onClick={() => {
+                          const lessonId = resumeMap[c.id] || '1';
+                          window.location.href = `/lesson/${c.id}/${lessonId}`;
+                        }}
+                        style={{
+                          background: '#D59C10', border: 'none',
+                          borderRadius: 50, padding: '6px 16px',
+                          fontSize: 12, fontWeight: 700, color: '#1A1D21',
+                          cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                        }}
+                      >Resume</button>
                     </div>
                   </div>
                 ))}

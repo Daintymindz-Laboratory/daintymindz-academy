@@ -508,7 +508,7 @@ export default function AdminPage() {
                           </div>
                         </div>
 
-                        {/* Video URL — all lesson types */}
+                        {/* Video URL (all lesson types) */}
                         <div>
                           <label style={labelStyle}>Video URL, YouTube or Loom (optional)</label>
                           <input style={inputStyle} value={editingLesson.video_url}

@@ -23,6 +23,7 @@ const TRACKS: Record<string, { label: string; color: string; glow: string }> = {
 export default function CertificatesPage() {
   const [certs, setCerts] = useState<Certificate[]>([]);
   const [userName, setUserName] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,9 +33,13 @@ export default function CertificatesPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = '/signin'; return; }
 
-      const { data: profile } = await supabase
-        .from('profiles').select('full_name').eq('id', user.id).single();
-      if (profile) setUserName(profile.full_name);
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles').select('full_name, is_admin').eq('id', user.id).single();
+      if (profileError) console.error('Profile fetch error:', profileError);
+      if (profile) {
+        setUserName(profile.full_name);
+        setIsAdmin(!!profile.is_admin);
+      }
 
       const { data: certsData } = await supabase
         .from('certificates')
@@ -89,9 +94,10 @@ export default function CertificatesPage() {
             <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>Navigation</div>
             {[
               { icon: '⊞', label: 'Dashboard', href: '/dashboard' },
-              { icon: '◎', label: 'My Courses', href: '/catalog' },
+              { icon: '◎', label: 'My Courses', href: '/my-courses' },
               { icon: '✦', label: 'Catalog', href: '/catalog' },
               { icon: '◈', label: 'Certificates', href: '/certificates', active: true },
+              ...(isAdmin ? [{ icon: '⚙', label: 'Admin Panel', href: '/admin' }] : []),
             ].map(item => (
               <a key={item.label} href={item.href} style={{
                 display: 'flex', alignItems: 'center', gap: 10,

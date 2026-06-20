@@ -24,40 +24,70 @@ type Course = {
   duration: string;
   description: string;
   progress: number;
+  resumeLessonId: number | null;
 };
 
 export default function MyCoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [userName, setUserName] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const init = async () => {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { window.location.href = '/signin'; return; }
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (!user || userError) { window.location.href = '/signin'; return; }
 
-      const { data: profile } = await supabase
-        .from('profiles').select('full_name').eq('id', user.id).single();
-      if (profile) setUserName(profile.full_name);
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles').select('full_name, is_admin').eq('id', user.id).single();
+      if (profileError) console.error('Profile fetch error:', profileError);
+      if (profile) {
+        setUserName(profile.full_name);
+        setIsAdmin(!!profile.is_admin);
+      }
 
-      const { data: enrollments } = await supabase
+      const { data: enrollments, error: enrollError } = await supabase
         .from('enrollments')
         .select('course_id, courses(*)')
         .eq('user_id', user.id);
+      if (enrollError) console.error('Enrollments fetch error:', enrollError);
 
-      const { data: progressData } = await supabase
-        .from('progress').select('*').eq('user_id', user.id);
+      const { data: progressData, error: progressError } = await supabase
+        .from('progress').select('course_id, percentage, completed_lessons').eq('user_id', user.id);
+      if (progressError) console.error('Progress fetch error:', progressError);
 
       const progressMap = Object.fromEntries(
-        (progressData || []).map((p: any) => [p.course_id, p.percentage])
+        (progressData || []).map((p: any) => [p.course_id, { percentage: p.percentage, completedLessons: p.completed_lessons || [] }])
       );
+
+      const enrolledCourseIds = (enrollments || []).map((e: any) => e.course_id);
+
+      // Fetch all lesson IDs for enrolled courses to determine resume lesson
+      const { data: lessonsData, error: lessonsError } = enrolledCourseIds.length > 0
+        ? await supabase.from('lessons').select('id, course_id, order_index')
+            .in('course_id', enrolledCourseIds)
+            .eq('is_published', true)
+            .order('order_index')
+        : { data: [], error: null };
+      if (lessonsError) console.error('Lessons fetch error:', lessonsError);
+
+      // Build map: course_id -> first incomplete lesson ID (or null if complete)
+      const resumeMap: Record<number, number | null> = {};
+      for (const courseId of enrolledCourseIds) {
+        const prog = progressMap[courseId];
+        const completedLessons: number[] = prog?.completedLessons || [];
+        const courseLessons = (lessonsData || []).filter((l: any) => l.course_id === courseId);
+        const nextLesson = courseLessons.find((l: any) => !completedLessons.includes(l.id));
+        resumeMap[courseId] = nextLesson ? nextLesson.id : (courseLessons[0]?.id || null);
+      }
 
       if (enrollments) {
         setCourses(enrollments.map((e: any) => ({
           ...e.courses,
-          progress: progressMap[e.course_id] || 0,
+          progress: progressMap[e.course_id]?.percentage || 0,
+          resumeLessonId: resumeMap[e.course_id] || null,
         })));
       }
 
@@ -111,6 +141,7 @@ export default function MyCoursesPage() {
               { icon: '◎', label: 'My Courses', href: '/my-courses', active: true },
               { icon: '✦', label: 'Catalog', href: '/catalog' },
               { icon: '◈', label: 'Certificates', href: '/certificates' },
+              ...(isAdmin ? [{ icon: '⚙', label: 'Admin Panel', href: '/admin' }] : []),
             ].map(item => (
               <a key={item.label} href={item.href} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
@@ -224,15 +255,21 @@ export default function MyCoursesPage() {
                       </div>
                     </div>
 
-                    <button onClick={() => window.location.href = `/lesson/${course.id}/1`} style={{
-                      padding: '10px 0', borderRadius: 50,
-                      background: course.progress > 0 ? 'rgba(213,156,16,0.08)' : '#D59C10',
-                      border: course.progress > 0 ? '1px solid rgba(213,156,16,0.3)' : 'none',
-                      color: course.progress > 0 ? '#D59C10' : '#1A1D21',
-                      fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                      fontFamily: 'DM Sans, sans-serif', transition: 'all 0.2s',
-                    }}>
-                      {course.progress === 100 ? 'Completed' : course.progress > 0 ? 'Continue' : 'Start course'}
+                    <button
+                      onClick={() => {
+                        const lessonId = course.resumeLessonId || '1';
+                        window.location.href = `/lesson/${course.id}/${lessonId}`;
+                      }}
+                      style={{
+                        padding: '10px 0', borderRadius: 50,
+                        background: course.progress > 0 ? 'rgba(213,156,16,0.08)' : '#D59C10',
+                        border: course.progress > 0 ? '1px solid rgba(213,156,16,0.3)' : 'none',
+                        color: course.progress > 0 ? '#D59C10' : '#1A1D21',
+                        fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                        fontFamily: 'DM Sans, sans-serif', transition: 'all 0.2s',
+                      }}
+                    >
+                      {course.progress === 100 ? 'Review course' : course.progress > 0 ? 'Continue' : 'Start course'}
                     </button>
                   </div>
                 );

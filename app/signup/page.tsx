@@ -71,7 +71,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       {/* BODY */}
       <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
 
-        {/* LEFT — branding panel */}
+        {/* LEFT: branding panel */}
         <div style={{
           borderRight: '1px solid #2A2F35',
           padding: '4rem',
@@ -146,7 +146,7 @@ const handleSubmit = async (e: React.FormEvent) => {
           </div>
         </div>
 
-        {/* RIGHT — form */}
+        {/* RIGHT: form */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '3rem 4rem',

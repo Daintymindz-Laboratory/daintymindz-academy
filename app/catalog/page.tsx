@@ -25,9 +25,9 @@ type Course = {
   description: string;
 };
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { icon: '⊞', label: 'Dashboard', href: '/dashboard' },
-  { icon: '◎', label: 'My Courses', href: '/dashboard' },
+  { icon: '◎', label: 'My Courses', href: '/my-courses' },
   { icon: '✦', label: 'Catalog', href: '/catalog', active: true },
   { icon: '◈', label: 'Certificates', active: false, href: '/certificates' },
 ];
@@ -38,9 +38,11 @@ export default function Catalog() {
   const [search, setSearch] = useState('');
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrolled, setEnrolled] = useState<number[]>([]);
+  const [resumeMap, setResumeMap] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
   const [userId, setUserId] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -50,18 +52,43 @@ export default function Catalog() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = '/signin'; return; }
 
-      const { data: profile } = await supabase
-        .from('profiles').select('full_name').eq('id', user.id).single();
-      if (profile) setUserName(profile.full_name);
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles').select('full_name, is_admin').eq('id', user.id).single();
+      if (profileError) console.error('Profile fetch error:', profileError);
+      if (profile) {
+        setUserName(profile.full_name);
+        setIsAdmin(!!profile.is_admin);
+      }
       setUserId(user.id);
 
-      const { data: coursesData } = await supabase
+      const { data: coursesData, error: coursesError } = await supabase
         .from('courses').select('*').order('track').order('id');
+      if (coursesError) console.error('Courses fetch error:', coursesError);
       if (coursesData) setCourses(coursesData);
 
-      const { data: enrollments } = await supabase
+      const { data: enrollments, error: enrollError } = await supabase
         .from('enrollments').select('course_id').eq('user_id', user.id);
-      if (enrollments) setEnrolled(enrollments.map((e: any) => e.course_id));
+      if (enrollError) console.error('Enrollments fetch error:', enrollError);
+      const enrolledIds = (enrollments || []).map((e: any) => e.course_id);
+      if (enrollments) setEnrolled(enrolledIds);
+
+      // Build resume map for enrolled courses
+      if (enrolledIds.length > 0) {
+        const { data: progressData } = await supabase
+          .from('progress').select('course_id, completed_lessons').eq('user_id', user.id);
+        const { data: lessonsData } = await supabase.from('lessons').select('id, course_id, order_index')
+          .in('course_id', enrolledIds).eq('is_published', true).order('order_index');
+        const newResumeMap: Record<number, number> = {};
+        for (const courseId of enrolledIds) {
+          const prog = (progressData || []).find((p: any) => p.course_id === courseId);
+          const completedLessons: number[] = prog?.completed_lessons || [];
+          const courseLessons = (lessonsData || []).filter((l: any) => l.course_id === courseId);
+          const nextLesson = courseLessons.find((l: any) => !completedLessons.includes(l.id));
+          if (nextLesson) newResumeMap[courseId] = nextLesson.id;
+          else if (courseLessons[0]) newResumeMap[courseId] = courseLessons[0].id;
+        }
+        setResumeMap(newResumeMap);
+      }
 
       setLoading(false);
     };
@@ -147,7 +174,7 @@ export default function Catalog() {
         }}>
           <div style={{ padding: '0 1rem', marginBottom: '1.5rem' }}>
             <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>Navigation</div>
-            {NAV_ITEMS.map(item => (
+            {[...BASE_NAV_ITEMS, ...(isAdmin ? [{ icon: '⚙', label: 'Admin Panel', href: '/admin', active: false }] : [])].map(item => (
               <a key={item.label} href={item.href} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '9px 12px', borderRadius: 10, marginBottom: 2,
@@ -313,7 +340,14 @@ export default function Catalog() {
                       </span>
                     </div>
 
-                    <button onClick={() => isEnrolled ? window.location.href = `/lesson/${course.id}/1` : enrollInCourse(course.id)} style={{
+                    <button onClick={() => {
+                      if (isEnrolled) {
+                        const lessonId = resumeMap[course.id] || '1';
+                        window.location.href = `/lesson/${course.id}/${lessonId}`;
+                      } else {
+                        enrollInCourse(course.id);
+                      }
+                    }} style={{
                       padding: '10px 0', borderRadius: 50,
                       background: isEnrolled ? 'rgba(213,156,16,0.08)' : '#D59C10',
                       border: isEnrolled ? '1px solid rgba(213,156,16,0.3)' : 'none',

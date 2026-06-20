@@ -57,7 +57,7 @@ export default function SignIn() {
         flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr',
       }}>
 
-        {/* LEFT — branding panel */}
+        {/* LEFT: branding panel */}
         <div style={{
           borderRight: '1px solid #2A2F35',
           padding: '4rem',
@@ -132,7 +132,7 @@ export default function SignIn() {
           </div>
         </div>
 
-        {/* RIGHT — form */}
+        {/* RIGHT: form */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '4rem',
