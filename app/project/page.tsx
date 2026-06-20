@@ -78,47 +78,43 @@ export default function ProjectPage() {
   const [pyodideReady, setPyodideReady] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [activeTab, setActiveTab] = useState<'instructions' | 'output'>('instructions');
-  const pyodideRef = useRef<any>(null);
+  const workerRef = useRef<Worker | null>(null);
+  const runTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const loadPyodide = async () => {
-      if (typeof window === 'undefined') return;
-      try {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
-        script.onload = async () => {
-          const py = await (window as any).loadPyodide({
-            indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/',
-          });
-          await py.loadPackagesFromImports('import pandas; import sklearn');
-          pyodideRef.current = py;
-          setPyodideReady(true);
-        };
-        document.head.appendChild(script);
-      } catch (e) {
-        console.error('Pyodide load error:', e);
-      }
+    const worker = new Worker('/pyodide-worker.js');
+    workerRef.current = worker;
+    worker.onmessage = (e) => {
+      if (e.data.type === 'ready') setPyodideReady(true);
     };
-    loadPyodide();
+    worker.onerror = (err) => console.error('Pyodide worker error:', err);
+    return () => { worker.terminate(); workerRef.current = null; };
   }, []);
 
-  const runCode = async () => {
-    if (!pyodideRef.current) return;
+  const runCode = () => {
+    if (!workerRef.current || !pyodideReady) return;
     setRunning(true);
     setActiveTab('output');
     setOutput('Running...\n');
-    try {
-      const py = pyodideRef.current;
-      let captured = '';
-      py.globals.set('print', (...args: any[]) => {
-        captured += args.join(' ') + '\n';
-      });
-      await py.runPythonAsync(code);
-      setOutput(captured || 'Code ran successfully with no output.');
-    } catch (e: any) {
-      setOutput(`Error:\n${e.message}`);
-    }
-    setRunning(false);
+    if (runTimeoutRef.current) clearTimeout(runTimeoutRef.current);
+    const worker = workerRef.current;
+    runTimeoutRef.current = setTimeout(() => {
+      worker.terminate();
+      workerRef.current = null;
+      setPyodideReady(false);
+      setOutput('Error:\nExecution timed out after 10 seconds. Check for infinite loops.');
+      setRunning(false);
+    }, 10000);
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data.type === 'output' || e.data.type === 'error') {
+        clearTimeout(runTimeoutRef.current!);
+        setOutput(e.data.type === 'error' ? `Error:\n${e.data.error}` : e.data.output);
+        setRunning(false);
+        worker.removeEventListener('message', handleMessage);
+      }
+    };
+    worker.addEventListener('message', handleMessage);
+    worker.postMessage({ type: 'run', code });
   };
 
   return (

@@ -64,7 +64,8 @@ export default function LessonPage() {
   const [running, setRunning] = useState(false);
   const [pyodideReady, setPyodideReady] = useState(false);
   const [activeTab, setActiveTab] = useState<'instructions' | 'output'>('instructions');
-  const pyodideRef = useRef<any>(null);
+  const workerRef = useRef<Worker | null>(null);
+  const runTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -109,7 +110,7 @@ export default function LessonPage() {
         .maybeSingle();
       if (progressError) console.error('Progress fetch error:', progressError);
       if (progressData?.completed_lessons) {
-        setCompletedIds(progressData.completed_lessons);
+        setCompletedIds((progressData.completed_lessons as any[]).map(Number));
       }
 
       setLoading(false);
@@ -117,23 +118,27 @@ export default function LessonPage() {
     init();
   }, [courseId, lessonId]);
 
-  // Load Pyodide only for project lessons
+  // Load Pyodide Web Worker for Python project lessons
   useEffect(() => {
     if (currentLesson?.type !== 'project') return;
     if (currentLesson?.language !== 'python') return;
-    if (pyodideRef.current) return;
+    if (workerRef.current) return;
 
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
-    script.onload = async () => {
-      const py = await (window as any).loadPyodide({
-        indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/',
-      });
-      await py.loadPackagesFromImports('import pandas; import sklearn');
-      pyodideRef.current = py;
-      setPyodideReady(true);
+    const worker = new Worker('/pyodide-worker.js');
+    workerRef.current = worker;
+
+    worker.onmessage = (e) => {
+      if (e.data.type === 'ready') setPyodideReady(true);
     };
-    document.head.appendChild(script);
+    worker.onerror = (err) => {
+      console.error('Pyodide worker error:', err);
+      setPyodideReady(false);
+    };
+
+    return () => {
+      worker.terminate();
+      workerRef.current = null;
+    };
   }, [currentLesson]);
 
   const switchLesson = (lesson: Lesson) => {
@@ -146,9 +151,11 @@ export default function LessonPage() {
 
   const markComplete = async () => {
     if (!currentLesson || !userId) return;
-    const newCompleted = completedIds.includes(currentLesson.id)
-      ? completedIds
-      : [...completedIds, currentLesson.id];
+    const lessonIdNum = Number(currentLesson.id);
+    const safeCompletedIds = completedIds.map(Number);
+    const newCompleted = safeCompletedIds.includes(lessonIdNum)
+      ? safeCompletedIds
+      : [...safeCompletedIds, lessonIdNum];
     setCompletedIds(newCompleted);
 
     const { createClient } = await import('@/lib/supabase');
@@ -194,23 +201,42 @@ export default function LessonPage() {
     }
   };
 
-  const runCode = async () => {
-    if (!pyodideRef.current) return;
+  const runCode = () => {
+    if (!workerRef.current || !pyodideReady) return;
     setRunning(true);
     setActiveTab('output');
     setOutput('Running...\n');
-    try {
-      const py = pyodideRef.current;
-      let captured = '';
-      py.globals.set('print', (...args: any[]) => {
-        captured += args.join(' ') + '\n';
-      });
-      await py.runPythonAsync(code);
-      setOutput(captured || 'Code ran with no output.');
-    } catch (e: any) {
-      setOutput(`Error:\n${e.message}`);
-    }
-    setRunning(false);
+
+    // Kill previous timeout if any
+    if (runTimeoutRef.current) clearTimeout(runTimeoutRef.current);
+
+    const worker = workerRef.current;
+
+    // Timeout: terminate worker and show error after 10 seconds
+    runTimeoutRef.current = setTimeout(() => {
+      worker.terminate();
+      workerRef.current = null;
+      setPyodideReady(false);
+      setOutput('Error:\nExecution timed out after 10 seconds. Check for infinite loops.');
+      setRunning(false);
+    }, 10000);
+
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data.type === 'output') {
+        clearTimeout(runTimeoutRef.current!);
+        setOutput(e.data.output);
+        setRunning(false);
+        worker.removeEventListener('message', handleMessage);
+      } else if (e.data.type === 'error') {
+        clearTimeout(runTimeoutRef.current!);
+        setOutput(`Error:\n${e.data.error}`);
+        setRunning(false);
+        worker.removeEventListener('message', handleMessage);
+      }
+    };
+
+    worker.addEventListener('message', handleMessage);
+    worker.postMessage({ type: 'run', code });
   };
 
   const copyCode = () => {
@@ -223,7 +249,7 @@ export default function LessonPage() {
   const currentIdx = lessons.findIndex(l => l.id === currentLesson?.id);
   const prevLesson = currentIdx > 0 ? lessons[currentIdx - 1] : null;
   const nextLesson = currentIdx < lessons.length - 1 ? lessons[currentIdx + 1] : null;
-  const isCompleted = currentLesson ? completedIds.includes(currentLesson.id) : false;
+  const isCompleted = currentLesson ? completedIds.map(Number).includes(Number(currentLesson.id)) : false;
   const isLastLesson = currentIdx === lessons.length - 1;
 
   if (loading) return (
@@ -265,10 +291,10 @@ export default function LessonPage() {
         <span style={{ color: '#3A3F46', fontSize: 12 }}>›</span>
         <span style={{ fontSize: 13, color: '#F5F5F5', fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentLesson.title}</span>
         <div style={{ flex: 1 }} />
-        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#6B7280' }}>
+        <div className="dm-hide-mobile" style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#6B7280' }}>
           {completedIds.length}/{lessons.length} complete
         </div>
-        <div style={{ width: 100, height: 4, background: '#2A2F35', borderRadius: 10, overflow: 'hidden' }}>
+        <div className="dm-hide-mobile" style={{ width: 100, height: 4, background: '#2A2F35', borderRadius: 10, overflow: 'hidden' }}>
           <div style={{
             width: `${(completedIds.length / lessons.length) * 100}%`,
             height: '100%', background: trackColor, borderRadius: 10, transition: 'width 0.4s',
@@ -283,19 +309,19 @@ export default function LessonPage() {
       {/* BODY */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
+        {/* Mobile backdrop */}
+        <div className={`dm-sidebar-backdrop${sidebarOpen ? ' open' : ''}`} onClick={() => setSidebarOpen(false)} />
         {/* LESSON SIDEBAR */}
-        {sidebarOpen && (
-          <aside style={{
-            width: 260, background: '#1A1D21', borderRight: '1px solid #2A2F35',
-            display: 'flex', flexDirection: 'column', flexShrink: 0, overflowY: 'auto',
-          }}>
+        <aside className={`dm-sidebar${sidebarOpen ? ' open' : ''}`} style={{
+          width: 260, top: 56, display: 'flex', flexDirection: 'column',
+        }}>
             <div style={{ padding: '1.25rem 1rem 0.75rem', borderBottom: '1px solid #2A2F35' }}>
               <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 6 }}>Course content</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5', lineHeight: 1.3 }}>{course?.title}</div>
             </div>
             <div style={{ padding: '0.75rem 0' }}>
               {lessons.map((lesson, idx) => {
-                const isDone = completedIds.includes(lesson.id);
+                const isDone = completedIds.map(Number).includes(Number(lesson.id));
                 const isCurrent = lesson.id === currentLesson.id;
                 return (
                   <div key={lesson.id} onClick={() => switchLesson(lesson)} style={{
@@ -342,10 +368,9 @@ export default function LessonPage() {
               })}
             </div>
           </aside>
-        )}
 
         {/* SPLIT SCREEN */}
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: currentLesson.type === 'project' ? '1fr 1fr' : '1fr 1fr', overflow: 'hidden' }}>
+        <div className="lesson-split">
 
           {/* LEFT: Content */}
           <div style={{ borderRight: '1px solid #2A2F35', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>

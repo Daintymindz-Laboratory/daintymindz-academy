@@ -148,7 +148,7 @@ export default function CertificateViewPage() {
       </nav>
 
       {/* BODY */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 380px', overflow: 'hidden' }}>
+      <div className="dm-grid-2cert" style={{ flex: 1 }}>
 
         {/* LEFT */}
         <div style={{

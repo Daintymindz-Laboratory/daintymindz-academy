@@ -43,6 +43,7 @@ export default function Catalog() {
   const [userName, setUserName] = useState('');
   const [userId, setUserId] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -81,7 +82,7 @@ export default function Catalog() {
         const newResumeMap: Record<number, number> = {};
         for (const courseId of enrolledIds) {
           const prog = (progressData || []).find((p: any) => p.course_id === courseId);
-          const completedLessons: number[] = prog?.completed_lessons || [];
+          const completedLessons: number[] = (prog?.completed_lessons || []).map(Number);
           const courseLessons = (lessonsData || []).filter((l: any) => l.course_id === courseId);
           const nextLesson = courseLessons.find((l: any) => !completedLessons.includes(l.id));
           if (nextLesson) newResumeMap[courseId] = nextLesson.id;
@@ -130,12 +131,15 @@ export default function Catalog() {
         padding: '0 1.5rem', gap: 16,
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
       }}>
+        <button onClick={() => setSidebarOpen(o => !o)} style={{
+          background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 20, padding: 4,
+        }}>☰</button>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
           <Image src="/logo.png" alt="Daintymindz" width={100} height={36} style={{ objectFit: 'contain' }} />
           <span style={{ fontSize: 14, fontWeight: 300, color: '#6B7280', borderLeft: '1px solid #3A3F46', paddingLeft: 8 }}>Academy</span>
         </a>
         <div style={{ flex: 1 }} />
-        <div style={{
+        <div className="dm-hide-mobile" style={{
           background: '#22262B', border: '1px solid #2A2F35',
           borderRadius: 50, padding: '8px 16px',
           display: 'flex', alignItems: 'center', gap: 8, width: 240,
@@ -164,14 +168,10 @@ export default function Catalog() {
 
       <div style={{ display: 'flex', flex: 1, paddingTop: 64 }}>
 
+        {/* Mobile backdrop */}
+        <div className={`dm-sidebar-backdrop${sidebarOpen ? ' open' : ''}`} onClick={() => setSidebarOpen(false)} />
         {/* SIDEBAR */}
-        <aside style={{
-          width: 240, background: '#1A1D21',
-          borderRight: '1px solid #2A2F35',
-          padding: '1.5rem 0',
-          position: 'fixed', top: 64, bottom: 0,
-          overflowY: 'auto', zIndex: 40,
-        }}>
+        <aside className={`dm-sidebar${sidebarOpen ? ' open' : ''}`} style={{ padding: '1.5rem 0' }}>
           <div style={{ padding: '0 1rem', marginBottom: '1.5rem' }}>
             <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>Navigation</div>
             {[...BASE_NAV_ITEMS, ...(isAdmin ? [{ icon: '⚙', label: 'Admin Panel', href: '/admin', active: false }] : [])].map(item => (
@@ -225,7 +225,7 @@ export default function Catalog() {
         </aside>
 
         {/* MAIN */}
-        <main style={{ flex: 1, marginLeft: 240, padding: '2.5rem', overflowY: 'auto' }}>
+        <main className="dm-main" style={{ flex: 1, marginLeft: 240, padding: '2.5rem', overflowY: 'auto' }}>
 
           <div style={{ marginBottom: '2rem' }}>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 8 }}>
@@ -272,7 +272,7 @@ export default function Catalog() {
                 : '// no courses match your search'}
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <div className="dm-grid-3">
               {filtered.map(course => {
                 const track = TRACKS[course.track as keyof typeof TRACKS];
                 const level = levelColors[course.level];

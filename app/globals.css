@@ -32,3 +32,61 @@ body {
 ::selection { background: var(--gold); color: #1A1D21; }
 
 code, pre { font-family: 'JetBrains Mono', monospace; }
+
+/* ── Responsive layout helpers ── */
+.dm-sidebar {
+  position: fixed; top: 64px; bottom: 0; left: 0;
+  width: 240px; z-index: 40;
+  padding: 0;
+  background: var(--graphite-bg);
+  border-right: 1px solid var(--graphite-card);
+  overflow-y: auto;
+  transition: transform 0.25s ease;
+}
+.dm-main { transition: margin-left 0.2s; }
+.dm-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.dm-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.dm-grid-2cert { display: grid; grid-template-columns: 1fr 380px; overflow: hidden; }
+
+/* Tablet: 2 columns */
+@media (max-width: 1024px) {
+  .dm-grid-3 { grid-template-columns: repeat(2, 1fr) !important; }
+  .dm-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* Mobile: 1 column, hidden sidebar */
+@media (max-width: 768px) {
+  .dm-sidebar {
+    transform: translateX(-100%);
+    width: 280px !important;
+    top: 56px;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+  .dm-sidebar.open { transform: translateX(0); }
+  .dm-main { margin-left: 0 !important; padding: 1.25rem !important; }
+  .dm-grid-3 { grid-template-columns: 1fr !important; }
+  .dm-grid-4 { grid-template-columns: 1fr 1fr !important; }
+  .dm-grid-2cert { grid-template-columns: 1fr !important; }
+  .dm-hide-mobile { display: none !important; }
+}
+
+@media (max-width: 480px) {
+  .dm-grid-4 { grid-template-columns: 1fr !important; }
+}
+
+/* Lesson split pane */
+.lesson-split { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; flex: 1; }
+@media (max-width: 768px) {
+  .lesson-split { grid-template-columns: 1fr !important; overflow-y: auto; }
+  .lesson-split > div:last-child { display: none; } /* hide code pane, accessible via tab */
+}
+
+/* Mobile overlay backdrop */
+.dm-sidebar-backdrop {
+  display: none;
+  position: fixed; inset: 0; z-index: 39;
+  background: rgba(0,0,0,0.5);
+}
+@media (max-width: 768px) {
+  .dm-sidebar-backdrop.open { display: block; }
+}

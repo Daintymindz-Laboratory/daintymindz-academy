@@ -201,7 +201,7 @@ export default function Dashboard() {
         const newResumeMap: Record<number, number> = {};
         for (const courseId of enrolledIds) {
           const prog = (progressData || []).find((p: any) => p.course_id === courseId);
-          const completedLessons: number[] = prog?.completed_lessons || [];
+          const completedLessons: number[] = (prog?.completed_lessons || []).map(Number);
           const courseLessons = (lessonsData || []).filter((l: any) => l.course_id === courseId);
           const nextLesson = courseLessons.find((l: any) => !completedLessons.includes(l.id));
           if (nextLesson) newResumeMap[courseId] = nextLesson.id;
@@ -302,14 +302,12 @@ export default function Dashboard() {
       <div style={{ display: 'flex', flex: 1, paddingTop: 64 }}>
 
         {/* SIDEBAR */}
-        {sidebarOpen && (
-          <aside style={{
-            width: 240, background: '#1A1D21',
-            borderRight: '1px solid #2A2F35',
-            padding: '1.5rem 0',
-            position: 'fixed', top: 64, bottom: 0,
-            overflowY: 'auto', zIndex: 40,
-          }}>
+        {/* Mobile backdrop */}
+        <div
+          className={`dm-sidebar-backdrop${sidebarOpen ? ' open' : ''}`}
+          onClick={() => setSidebarOpen(false)}
+        />
+        <aside className={`dm-sidebar${sidebarOpen ? ' open' : ''}`} style={{ padding: '1.5rem 0' }}>
             <div style={{ padding: '0 1rem', marginBottom: '1.5rem' }}>
               <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>
                 Navigation
@@ -407,14 +405,12 @@ export default function Dashboard() {
               </div>
             </div>
           </aside>
-        )}
 
         {/* MAIN */}
-        <main style={{
+        <main className="dm-main" style={{
           flex: 1,
           marginLeft: sidebarOpen ? 240 : 0,
-          padding: '2.5rem 2.5rem',
-          transition: 'margin-left 0.2s',
+          padding: '2.5rem',
           overflowY: 'auto',
         }}>
           {/* Welcome */}
@@ -437,7 +433,7 @@ export default function Dashboard() {
           </div>
 
           {/* Stats row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: '2.5rem' }}>
+          <div className="dm-grid-4" style={{ marginBottom: '2.5rem' }}>
             {[
               { label: 'Enrolled', val: allCourses.filter(c => c.enrolled).length, unit: 'courses', color: '#D59C10' },
               { label: 'Completed', val: completedCount, unit: 'courses', color: '#4CAF7D' },
@@ -464,7 +460,7 @@ export default function Dashboard() {
                 <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>My Courses</h2>
                 <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>{allCourses.filter(c => c.enrolled).length} ENROLLED</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              <div className="dm-grid-3">
                 {allCourses.filter(c => c.enrolled).map(c => (
                   <div key={c.id} style={{
                     background: '#22262B', border: '1px solid #2A2F35',
@@ -500,7 +496,7 @@ export default function Dashboard() {
               <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>Recommended for you</h2>
               <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: TRACKS[userTrack].color, letterSpacing: '0.1em' }}>{userTrack} TRACK</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <div className="dm-grid-3">
               {recommended.map(c => <CourseCard key={c.id} course={c} recommended />)}
             </div>
           </div>
@@ -511,7 +507,7 @@ export default function Dashboard() {
               <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>Explore other tracks</h2>
               <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>9 COURSES</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+            <div className="dm-grid-3">
               {explore.map(c => <CourseCard key={c.id} course={c} />)}
             </div>
           </div>
