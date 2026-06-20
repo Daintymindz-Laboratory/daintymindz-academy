@@ -267,7 +267,7 @@ export default function AdminPage() {
       <div style={{ paddingTop: 60, display: 'flex', minHeight: '100vh' }}>
 
         {/* SIDEBAR */}
-        <aside className="dm-sidebar" style={{ top: 60, padding: '1.5rem 0', width: 220 }}>
+        <aside className="dm-sidebar" style={{ top: 60, padding: '1.5rem 0' }}>
           <div style={{ padding: '0 1rem' }}>
             <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>Admin</div>
             {[
@@ -291,7 +291,7 @@ export default function AdminPage() {
         </aside>
 
         {/* MAIN */}
-        <main className="dm-main" style={{ flex: 1, marginLeft: 220, padding: '2rem 2.5rem', overflowY: 'auto' }}>
+        <main className="dm-main" style={{ flex: 1, marginLeft: 240, padding: '2rem 2.5rem', overflowY: 'auto' }}>
 
           {/* COURSE MANAGER */}
           {activeTab === 'courses' && (

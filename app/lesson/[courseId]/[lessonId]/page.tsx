@@ -57,7 +57,7 @@ export default function LessonPage() {
   const [userName, setUserName] = useState('');
   const [userId, setUserId] = useState('');
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [code, setCode] = useState('');
   const [output, setOutput] = useState('');

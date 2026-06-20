@@ -19,6 +19,7 @@ type Course = {
   description: string;
   progress: number;
   enrolled: boolean;
+  resumeLessonId: number | null;
 };
 
 type UserProfile = { name: string; track: string; streak: number; certsEarned: number; isAdmin: boolean; };
@@ -148,7 +149,6 @@ function CourseCard({ course, recommended = false, onEnroll }: { course: Course;
 export default function Dashboard() {
 
   const [user, setUser] = useState<UserProfile>({ name: '', track: 'AI', streak: 0, certsEarned: 0, isAdmin: false });
-  const [resumeMap, setResumeMap] = useState<Record<number, number>>({});
   const [userLoading, setUserLoading] = useState(true);
 
   const [allCourses, setAllCourses] = useState<Course[]>([]);
@@ -194,20 +194,22 @@ export default function Dashboard() {
       const enrolledIds = enrollments?.map((e: any) => e.course_id) || [];
       const progressMap = Object.fromEntries((progressData || []).map((p: any) => [p.course_id, p.percentage]));
 
-      // Build resume map: course_id -> next lesson ID
+      // Fetch lesson IDs for enrolled courses to compute resume lesson
+      let resumeLessonIdMap: Record<number, number | null> = {};
       if (enrolledIds.length > 0) {
-        const { data: lessonsData } = await supabase.from('lessons').select('id, course_id, order_index')
+        const { data: lessonsData, error: lessonsError } = await supabase
+          .from('lessons').select('id, course_id, order_index')
           .in('course_id', enrolledIds).eq('is_published', true).order('order_index');
-        const newResumeMap: Record<number, number> = {};
+        if (lessonsError) console.error('Lessons fetch error:', lessonsError);
         for (const courseId of enrolledIds) {
           const prog = (progressData || []).find((p: any) => p.course_id === courseId);
           const completedLessons: number[] = (prog?.completed_lessons || []).map(Number);
-          const courseLessons = (lessonsData || []).filter((l: any) => l.course_id === courseId);
-          const nextLesson = courseLessons.find((l: any) => !completedLessons.includes(l.id));
-          if (nextLesson) newResumeMap[courseId] = nextLesson.id;
-          else if (courseLessons[0]) newResumeMap[courseId] = courseLessons[0].id;
+          const courseLessons = (lessonsData || []).filter((l: any) => Number(l.course_id) === Number(courseId));
+          const nextLesson = courseLessons.find((l: any) => !completedLessons.includes(Number(l.id)));
+          resumeLessonIdMap[Number(courseId)] = nextLesson
+            ? Number(nextLesson.id)
+            : courseLessons[0] ? Number(courseLessons[0].id) : null;
         }
-        setResumeMap(newResumeMap);
       }
 
       if (courses) {
@@ -216,6 +218,7 @@ export default function Dashboard() {
           lessons: c.lessons_count,
           enrolled: enrolledIds.includes(c.id),
           progress: progressMap[c.id] || 0,
+          resumeLessonId: resumeLessonIdMap[Number(c.id)] ?? null,
         })));
       }
 
@@ -225,7 +228,7 @@ export default function Dashboard() {
   }, []);
 
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTrack, setActiveTrack] = useState('All');
   const userTrack = user.track as keyof typeof TRACKS;
   const recommended = allCourses.filter(c => c.track === userTrack && !c.enrolled);
@@ -263,7 +266,7 @@ export default function Dashboard() {
         <div style={{ flex: 1 }} />
 
         {/* Search */}
-        <div style={{
+        <div className="dm-hide-mobile" style={{
           background: '#22262B', border: '1px solid #2A2F35',
           borderRadius: 50, padding: '8px 16px',
           display: 'flex', alignItems: 'center', gap: 8,
@@ -278,7 +281,7 @@ export default function Dashboard() {
         </div>
 
         {/* Streak */}
-        <div style={{
+        <div className="dm-hide-mobile" style={{
           display: 'flex', alignItems: 'center', gap: 6,
           background: 'rgba(213,156,16,0.08)',
           border: '1px solid rgba(213,156,16,0.2)',
@@ -409,7 +412,7 @@ export default function Dashboard() {
         {/* MAIN */}
         <main className="dm-main" style={{
           flex: 1,
-          marginLeft: sidebarOpen ? 240 : 0,
+          marginLeft: 240,
           padding: '2.5rem',
           overflowY: 'auto',
         }}>
@@ -473,7 +476,7 @@ export default function Dashboard() {
                       <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>{c.progress}% complete</div>
                       <button
                         onClick={() => {
-                          const lessonId = resumeMap[c.id] || '1';
+                          const lessonId = c.resumeLessonId || '1';
                           window.location.href = `/lesson/${c.id}/${lessonId}`;
                         }}
                         style={{

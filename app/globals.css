@@ -48,6 +48,12 @@ code, pre { font-family: 'JetBrains Mono', monospace; }
 .dm-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .dm-grid-2cert { display: grid; grid-template-columns: 1fr 380px; overflow: hidden; }
 
+/* Desktop: sidebar always visible regardless of JS open/close state */
+@media (min-width: 769px) {
+  .dm-sidebar { transform: translateX(0) !important; }
+  .dm-main { margin-left: 240px !important; }
+}
+
 /* Tablet: 2 columns */
 @media (max-width: 1024px) {
   .dm-grid-3 { grid-template-columns: repeat(2, 1fr) !important; }
