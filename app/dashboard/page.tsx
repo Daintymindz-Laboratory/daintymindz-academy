@@ -195,10 +195,18 @@ export default function Dashboard() {
       const certsCount = certsData?.length || 0;
 
       if (profile) {
+        const today = new Date().toISOString().slice(0, 10);
+        const lastActive = profile.last_active_date as string | null;
+        let streak = profile.streak as number || 0;
+        if (lastActive !== today) {
+          const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+          streak = lastActive === yesterday ? streak + 1 : 1;
+          supabase.from('profiles').update({ streak, last_active_date: today }).eq('id', authUser.id);
+        }
         setUser({
           name: profile.full_name || authUser.email || 'Student',
           track: profile.track || 'AI',
-          streak: 0,
+          streak,
           certsEarned: certsCount,
           isAdmin: !!profile.is_admin,
         });
@@ -245,6 +253,7 @@ export default function Dashboard() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTrack, setActiveTrack] = useState('All');
+  const [search, setSearch] = useState('');
 
   const toggleCollapse = () => {
     setSidebarCollapsed(c => {
@@ -254,8 +263,9 @@ export default function Dashboard() {
     });
   };
   const userTrack = user.track as keyof typeof TRACKS;
-  const recommended = allCourses.filter(c => c.track === userTrack && !c.enrolled);
-  const explore = allCourses.filter(c => c.track !== userTrack && !c.enrolled && (activeTrack === 'All' || c.track === activeTrack));
+  const searchMatch = (c: Course) => !search || c.title.toLowerCase().includes(search.toLowerCase()) || (c.description || '').toLowerCase().includes(search.toLowerCase());
+  const recommended = allCourses.filter(c => c.track === userTrack && !c.enrolled && searchMatch(c));
+  const explore = allCourses.filter(c => c.track !== userTrack && !c.enrolled && (activeTrack === 'All' || c.track === activeTrack) && searchMatch(c));
   const completedCount = allCourses.filter(c => c.progress === 100).length;
   
   if (userLoading) return (
@@ -296,7 +306,7 @@ export default function Dashboard() {
           width: 240,
         }}>
           <span style={{ color: '#3A3F46', fontSize: 14 }}>⌕</span>
-          <input placeholder="Search courses..." style={{
+          <input placeholder="Search courses..." value={search} onChange={e => setSearch(e.target.value)} style={{
             background: 'none', border: 'none', outline: 'none',
             color: '#F5F5F5', fontSize: 13, width: '100%',
             fontFamily: 'DM Sans, sans-serif',

@@ -52,11 +52,27 @@ const EMPTY_COURSE: Course = {
 };
 
 export default function AdminPage() {
+  type Analytics = {
+    totalStudents: number;
+    totalEnrollments: number;
+    totalCerts: number;
+    enrollmentsByCourse: { title: string; track: string; count: number }[];
+    avgCompletionByCourse: { title: string; track: string; avg: number }[];
+  };
+
+  type StudentDetail = {
+    student: Profile;
+    enrollments: { course_id: number; course_title: string; track: string; progress: number }[];
+    certs: { cert_id: string; course_title: string; issued_at: string }[];
+  };
+
   const [adminName, setAdminName] = useState('');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics'>('courses');
   const [courses, setCourses] = useState<Course[]>([]);
   const [students, setStudents] = useState<Profile[]>([]);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<StudentDetail | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course>(EMPTY_COURSE);
   const [saving, setSaving] = useState(false);
@@ -104,6 +120,7 @@ export default function AdminPage() {
       setAdminName(profile.full_name);
       await loadCourses(supabase);
       await loadStudents(supabase);
+      await loadAnalytics(supabase);
       setLoading(false);
     };
     init();
@@ -117,6 +134,78 @@ export default function AdminPage() {
   const loadStudents = async (supabase: any) => {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (data) setStudents(data);
+  };
+
+  const loadAnalytics = async (supabase: any) => {
+    const [
+      { data: enrollData },
+      { data: progressData },
+      { data: certsData },
+      { data: coursesData },
+    ] = await Promise.all([
+      supabase.from('enrollments').select('course_id, user_id'),
+      supabase.from('progress').select('course_id, percentage'),
+      supabase.from('certificates').select('course_id'),
+      supabase.from('courses').select('id, title, track'),
+    ]);
+
+    const courseMap: Record<number, { title: string; track: string }> = {};
+    (coursesData || []).forEach((c: any) => { courseMap[c.id] = { title: c.title, track: c.track }; });
+
+    const enrollCount: Record<number, number> = {};
+    (enrollData || []).forEach((e: any) => { enrollCount[e.course_id] = (enrollCount[e.course_id] || 0) + 1; });
+
+    const progressSum: Record<number, { sum: number; count: number }> = {};
+    (progressData || []).forEach((p: any) => {
+      if (!progressSum[p.course_id]) progressSum[p.course_id] = { sum: 0, count: 0 };
+      progressSum[p.course_id].sum += p.percentage || 0;
+      progressSum[p.course_id].count += 1;
+    });
+
+    const enrollmentsByCourse = Object.entries(enrollCount)
+      .map(([id, count]) => ({ title: courseMap[Number(id)]?.title || '', track: courseMap[Number(id)]?.track || '', count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const avgCompletionByCourse = Object.entries(progressSum)
+      .map(([id, { sum, count }]) => ({ title: courseMap[Number(id)]?.title || '', track: courseMap[Number(id)]?.track || '', avg: Math.round(sum / count) }))
+      .sort((a, b) => b.avg - a.avg)
+      .slice(0, 8);
+
+    setAnalytics({
+      totalStudents: (await supabase.from('profiles').select('id', { count: 'exact', head: true })).count || 0,
+      totalEnrollments: (enrollData || []).length,
+      totalCerts: (certsData || []).length,
+      enrollmentsByCourse,
+      avgCompletionByCourse,
+    });
+  };
+
+  const openStudentDetail = async (student: Profile) => {
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const [{ data: enrollData }, { data: progressData }, { data: certsData }, { data: coursesData }] = await Promise.all([
+      supabase.from('enrollments').select('course_id').eq('user_id', student.id),
+      supabase.from('progress').select('course_id, percentage').eq('user_id', student.id),
+      supabase.from('certificates').select('cert_id, course_id, issued_at').eq('user_id', student.id),
+      supabase.from('courses').select('id, title, track'),
+    ]);
+    const courseMap: Record<number, { title: string; track: string }> = {};
+    (coursesData || []).forEach((c: any) => { courseMap[c.id] = { title: c.title, track: c.track }; });
+    const progressMap: Record<number, number> = {};
+    (progressData || []).forEach((p: any) => { progressMap[p.course_id] = p.percentage || 0; });
+    const enrollments = (enrollData || []).map((e: any) => ({
+      course_id: e.course_id,
+      course_title: courseMap[e.course_id]?.title || '',
+      track: courseMap[e.course_id]?.track || '',
+      progress: progressMap[e.course_id] || 0,
+    }));
+    const certs = (certsData || []).map((c: any) => ({
+      cert_id: c.cert_id,
+      course_title: courseMap[c.course_id]?.title || '',
+      issued_at: c.issued_at,
+    }));
+    setSelectedStudent({ student, enrollments, certs });
   };
 
   const showToast = (msg: string) => {
@@ -388,6 +477,7 @@ export default function AdminPage() {
               { id: 'courses', label: 'Course Manager', icon: '◎' },
               { id: 'lessons', label: 'Lesson Builder', icon: '✦' },
               { id: 'students', label: 'Students', icon: '⊞' },
+              { id: 'analytics', label: 'Analytics', icon: '◈' },
             ].map(item => (
               <div key={item.id} onClick={() => setActiveTab(item.id as any)} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
@@ -1019,6 +1109,75 @@ export default function AdminPage() {
           )}
 
           {/* STUDENTS */}
+          {activeTab === 'analytics' && (
+            <div>
+              <div style={{ marginBottom: '2rem' }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// analytics'}</div>
+                <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5', letterSpacing: '-0.02em' }}>Analytics</h1>
+              </div>
+              {analytics ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                    {[
+                      { label: 'Total Students', value: analytics.totalStudents, color: '#D59C10' },
+                      { label: 'Total Enrollments', value: analytics.totalEnrollments, color: '#4E8FD4' },
+                      { label: 'Certificates Issued', value: analytics.totalCerts, color: '#4CAF7D' },
+                    ].map(stat => (
+                      <div key={stat.label} style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
+                        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#6B7280', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>{stat.label}</div>
+                        <div style={{ fontSize: 36, fontWeight: 700, color: stat.color }}>{stat.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
+                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>Top Enrolled Courses</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {analytics.enrollmentsByCourse.map((c, i) => {
+                          const tColor = TRACKS[c.track as keyof typeof TRACKS]?.color || '#D59C10';
+                          return (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', width: 16 }}>{i + 1}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, color: '#F5F5F5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</div>
+                                <div style={{ height: 4, background: '#2A2F35', borderRadius: 4, marginTop: 4 }}>
+                                  <div style={{ height: '100%', background: tColor, borderRadius: 4, width: `${Math.min((c.count / (analytics.enrollmentsByCourse[0]?.count || 1)) * 100, 100)}%` }} />
+                                </div>
+                              </div>
+                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: tColor, flexShrink: 0 }}>{c.count}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
+                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#4CAF7D', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>Avg Completion by Course</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {analytics.avgCompletionByCourse.map((c, i) => {
+                          const tColor = TRACKS[c.track as keyof typeof TRACKS]?.color || '#D59C10';
+                          return (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', width: 16 }}>{i + 1}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, color: '#F5F5F5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</div>
+                                <div style={{ height: 4, background: '#2A2F35', borderRadius: 4, marginTop: 4 }}>
+                                  <div style={{ height: '100%', background: tColor, borderRadius: 4, width: `${c.avg}%` }} />
+                                </div>
+                              </div>
+                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#6B7280', flexShrink: 0 }}>{c.avg}%</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>Loading analytics...</div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'students' && (
             <div>
               <div style={{ marginBottom: '2rem' }}>
@@ -1040,7 +1199,9 @@ export default function AdminPage() {
                     {students.map(s => {
                       const track = TRACKS[s.track as keyof typeof TRACKS];
                       return (
-                        <tr key={s.id} style={{ borderBottom: '1px solid #2A2F35' }}>
+                        <tr key={s.id} onClick={() => openStudentDetail(s)} style={{ borderBottom: '1px solid #2A2F35', cursor: 'pointer', transition: 'background 0.15s' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(213,156,16,0.04)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                           <td style={{ padding: '13px 16px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <div style={{
@@ -1075,6 +1236,64 @@ export default function AdminPage() {
           )}
         </main>
       </div>
+
+      {/* Student detail modal */}
+      {selectedStudent && (
+        <div onClick={() => setSelectedStudent(null)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
+          zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem',
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: '#22262B', border: '1px solid #2A2F35', borderRadius: 20,
+            padding: '2rem', width: '100%', maxWidth: 520, maxHeight: '80vh', overflowY: 'auto',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: '1.5rem' }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#D59C10', color: '#1A1D21', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 16 }}>
+                {selectedStudent.student.full_name?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+              </div>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#F5F5F5' }}>{selectedStudent.student.full_name}</div>
+                <div style={{ fontSize: 13, color: '#6B7280' }}>{selectedStudent.student.email}</div>
+              </div>
+              <button onClick={() => setSelectedStudent(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#6B7280', fontSize: 20, cursor: 'pointer' }}>x</button>
+            </div>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10 }}>Enrolled Courses ({selectedStudent.enrollments.length})</div>
+              {selectedStudent.enrollments.length === 0 ? (
+                <div style={{ fontSize: 13, color: '#3A3F46' }}>No enrollments.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {selectedStudent.enrollments.map(e => {
+                    const tColor = TRACKS[e.track as keyof typeof TRACKS]?.color || '#D59C10';
+                    return (
+                      <div key={e.course_id} style={{ background: '#1A1D21', borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, padding: '2px 8px', borderRadius: 20, background: `${tColor}15`, color: tColor }}>{e.track}</span>
+                        <span style={{ fontSize: 13, color: '#F5F5F5', flex: 1 }}>{e.course_title}</span>
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: e.progress === 100 ? '#4CAF7D' : '#6B7280' }}>{e.progress}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#4CAF7D', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10 }}>Certificates ({selectedStudent.certs.length})</div>
+              {selectedStudent.certs.length === 0 ? (
+                <div style={{ fontSize: 13, color: '#3A3F46' }}>No certificates yet.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {selectedStudent.certs.map(c => (
+                    <div key={c.cert_id} style={{ background: '#1A1D21', borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 13, color: '#F5F5F5' }}>{c.course_title}</span>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#4CAF7D' }}>{new Date(c.issued_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (

@@ -18,26 +18,6 @@ const TRACKS: Record<string, { label: string; color: string }> = {
   DO: { label: 'Data Operations', color: '#9B6FD4' },
 };
 
-const printStyles = `
-  @media print {
-    @page { size: A4 landscape; margin: 0; }
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
-    body * { visibility: hidden !important; }
-    #certificate, #certificate * { visibility: visible !important; }
-    #certificate {
-      position: fixed !important;
-      top: 0 !important; left: 0 !important;
-      width: 100vw !important; height: 100vh !important;
-      max-width: none !important;
-      box-shadow: none !important;
-      margin: 0 !important;
-      padding: 24px 60px !important;
-      box-sizing: border-box !important;
-      page-break-after: avoid !important;
-      page-break-inside: avoid !important;
-    }
-  }
-`;
 
 export default function CertificateViewPage() {
   const params = useParams();
@@ -74,7 +54,24 @@ export default function CertificateViewPage() {
     init();
   }, [certId]);
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    const certEl = document.getElementById('certificate');
+    if (!certEl) return;
+    const origin = window.location.origin;
+    const certHtml = certEl.outerHTML.replace(/src="\/logo\.png"/g, `src="${origin}/logo.png"`);
+    const win = window.open('', '_blank', 'width=1200,height=850');
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head>
+<title>Certificate</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+@page { size: A4 landscape; margin: 0; }
+* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: 297mm; height: 210mm; overflow: hidden; background: white; display: flex; align-items: center; justify-content: center; }
+</style>
+</head><body>${certHtml}<script>setTimeout(function(){window.print();},1200);<\/script></body></html>`);
+    win.document.close();
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(verifyUrl);
@@ -116,8 +113,6 @@ export default function CertificateViewPage() {
 
   return (
     <div style={{ background: '#1A1D21', minHeight: '100vh', fontFamily: 'DM Sans, sans-serif', display: 'flex', flexDirection: 'column' }}>
-
-      <style dangerouslySetInnerHTML={{ __html: printStyles }} />
 
       {/* NAV */}
       <nav style={{

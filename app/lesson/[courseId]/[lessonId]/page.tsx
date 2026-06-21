@@ -77,6 +77,10 @@ export default function LessonPage() {
   const [activeTab, setActiveTab] = useState<'instructions' | 'output'>('instructions');
   const workerRef = useRef<Worker | null>(null);
   const runTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [notesSaved, setNotesSaved] = useState(false);
+  const notesSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inlineWorkerRef = useRef<Worker | null>(null);
   const [inlinePyodideReady, setInlinePyodideReady] = useState(false);
@@ -106,6 +110,8 @@ export default function LessonPage() {
       if (target) {
         setCurrentLesson(target);
         setCode(target.starter_code || target.code || '');
+        const { data: noteData } = await supabase.from('lesson_notes').select('note').eq('user_id', user.id).eq('lesson_id', target.id).maybeSingle();
+        setNoteText(noteData?.note || '');
       }
 
       const { data: progressData } = await supabase
@@ -136,12 +142,38 @@ export default function LessonPage() {
     return () => { worker.terminate(); inlineWorkerRef.current = null; };
   }, [currentLesson]);
 
+  const loadNote = async (lessonId: number, uid: string) => {
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { data } = await supabase.from('lesson_notes').select('note').eq('user_id', uid).eq('lesson_id', lessonId).maybeSingle();
+    setNoteText(data?.note || '');
+  };
+
+  const saveNote = async (text: string, lid: number, uid: string) => {
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    await supabase.from('lesson_notes').upsert({ user_id: uid, lesson_id: lid, note: text, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lesson_id' });
+    setNotesSaved(true);
+    setTimeout(() => setNotesSaved(false), 2000);
+  };
+
+  const handleNoteChange = (text: string) => {
+    setNoteText(text);
+    setNotesSaved(false);
+    if (notesSaveRef.current) clearTimeout(notesSaveRef.current);
+    notesSaveRef.current = setTimeout(() => {
+      if (currentLesson && userId) saveNote(text, Number(currentLesson.id), userId);
+    }, 1200);
+  };
+
   const switchLesson = (lesson: Lesson) => {
     setCurrentLesson(lesson);
     setCode(lesson.starter_code || lesson.code || '');
     setOutput('');
     setActiveTab('instructions');
     setSidebarOpen(false);
+    setNoteText('');
+    if (userId) loadNote(Number(lesson.id), userId);
     window.history.pushState({}, '', `/lesson/${courseId}/${lesson.id}`);
   };
 
@@ -233,6 +265,12 @@ export default function LessonPage() {
         <div className="dm-hide-mobile" style={{ width: 100, height: 4, background: '#2A2F35', borderRadius: 10, overflow: 'hidden' }}>
           <div style={{ width: `${(completedIds.length / lessons.length) * 100}%`, height: '100%', background: trackColor, borderRadius: 10, transition: 'width 0.4s' }} />
         </div>
+        <button onClick={() => setNotesOpen(o => !o)} style={{
+          background: notesOpen ? 'rgba(213,156,16,0.1)' : 'transparent',
+          border: notesOpen ? '1px solid rgba(213,156,16,0.3)' : '1px solid #2A2F35',
+          borderRadius: 20, padding: '5px 14px', color: notesOpen ? '#D59C10' : '#6B7280',
+          fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+        }}>Notes</button>
         <a href="/dashboard" style={{ color: '#6B7280', fontSize: 13, textDecoration: 'none', border: '1px solid #2A2F35', borderRadius: 20, padding: '5px 14px' }}>Dashboard</a>
       </nav>
 
@@ -362,6 +400,36 @@ export default function LessonPage() {
           </div>
         )}
       </div>
+
+      {/* Notes panel */}
+      {notesOpen && (
+        <div style={{
+          position: 'fixed', top: 56, right: 0, bottom: 0, width: 320,
+          background: '#22262B', borderLeft: '1px solid #2A2F35',
+          display: 'flex', flexDirection: 'column', zIndex: 40,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #2A2F35' }}>
+            <div>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: trackColor, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Notes</div>
+              <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{currentLesson.title}</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {notesSaved && <span style={{ fontSize: 11, color: '#4CAF7D', fontFamily: 'JetBrains Mono, monospace' }}>Saved</span>}
+              <button onClick={() => setNotesOpen(false)} style={{ background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>x</button>
+            </div>
+          </div>
+          <textarea
+            value={noteText}
+            onChange={e => handleNoteChange(e.target.value)}
+            placeholder={'Write your notes here...\n\nThey are saved automatically.'}
+            style={{
+              flex: 1, background: 'transparent', border: 'none', outline: 'none',
+              padding: '16px', fontFamily: 'DM Sans, sans-serif', fontSize: 14,
+              color: '#E5E7EB', lineHeight: 1.7, resize: 'none',
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

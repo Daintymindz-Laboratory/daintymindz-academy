@@ -8,6 +8,20 @@ export const metadata: Metadata = {
     icon: '/logo.png',
     apple: '/logo.png',
   },
+  openGraph: {
+    title: "Daintymindz Academy",
+    description: "A structured learning platform for researchers, engineers, and data practitioners.",
+    url: "https://academy.daintymindz.com",
+    siteName: "Daintymindz Academy",
+    type: "website",
+    images: [{ url: "https://academy.daintymindz.com/og.png", width: 1200, height: 630, alt: "Daintymindz Academy" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Daintymindz Academy",
+    description: "A structured learning platform for researchers, engineers, and data practitioners.",
+    images: ["https://academy.daintymindz.com/og.png"],
+  },
 };
 
 export default function RootLayout({
