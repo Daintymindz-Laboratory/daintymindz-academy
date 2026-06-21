@@ -156,6 +156,7 @@ export default function Dashboard() {
     return false;
   });
   const [profileOpen, setProfileOpen] = useState(false);
+  const [profileName, setProfileName] = useState('');
   const [profileBio, setProfileBio] = useState('');
   const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
@@ -210,6 +211,7 @@ export default function Dashboard() {
           certsEarned: certsCount,
           isAdmin: !!profile.is_admin,
         });
+        setProfileName(profile.full_name || '');
         setProfileBio(profile.bio || '');
         setProfileAvatarUrl(profile.avatar_url || '');
       }
@@ -618,9 +620,13 @@ export default function Dashboard() {
           {/* Name */}
           <div>
             <label style={{ fontSize: 11, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Name</label>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#F5F5F5', padding: '10px 14px', background: '#22262B', borderRadius: 10, border: '1px solid #2A2F35' }}>
-              {user.name}
-            </div>
+            <input
+              value={profileName}
+              onChange={e => setProfileName(e.target.value)}
+              style={{ width: '100%', fontSize: 15, fontWeight: 600, color: '#F5F5F5', padding: '10px 14px', background: '#22262B', borderRadius: 10, border: '1px solid #2A2F35', fontFamily: 'DM Sans, sans-serif', outline: 'none' }}
+              onFocus={e => (e.currentTarget.style.borderColor = '#D59C10')}
+              onBlur={e => (e.currentTarget.style.borderColor = '#2A2F35')}
+            />
           </div>
 
           {/* Email */}
@@ -661,10 +667,12 @@ export default function Dashboard() {
             disabled={profileSaving}
             onClick={async () => {
               if (!authUserId) return;
+              if (!profileName.trim()) return;
               setProfileSaving(true);
               const { createClient } = await import('@/lib/supabase');
               const supabase = createClient();
-              await supabase.from('profiles').update({ bio: profileBio }).eq('id', authUserId);
+              await supabase.from('profiles').update({ full_name: profileName.trim(), bio: profileBio }).eq('id', authUserId);
+              setUser(u => ({ ...u, name: profileName.trim() }));
               setProfileSaving(false);
             }}
             style={{
