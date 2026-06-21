@@ -640,16 +640,43 @@ export default function AdminPage() {
                         {editingLesson.type === 'lesson' && (
                           <>
                             <div data-color-mode="dark">
-                              <label style={{ ...labelStyle, marginBottom: 10 }}>Lesson Content, Markdown supported</label>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                <label style={labelStyle}>Lesson Content, Markdown supported</label>
+                                {editingLesson.id && selectedCourse?.id && (
+                                  <button
+                                    onClick={() => window.open(`/lesson/${selectedCourse.id}/${editingLesson.id}`, '_blank')}
+                                    style={{
+                                      background: 'transparent', border: '1px solid #3A3F46',
+                                      borderRadius: 20, padding: '5px 14px',
+                                      fontSize: 12, color: '#9CA3AF', cursor: 'pointer',
+                                      fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 6,
+                                    }}
+                                  >
+                                    <span style={{ fontSize: 11 }}>↗</span> Preview as Student
+                                  </button>
+                                )}
+                              </div>
                               <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 8, fontFamily: 'JetBrains Mono, monospace' }}>
-                                Use # for headings · **bold** · *italic* · - for lists · {'>'} for quotes · ```python for code blocks
+                                Use # for headings · **bold** · *italic* · - for lists · {'>'} for quotes · ```python-run for interactive cells
                               </div>
                               <MDEditor
                                 value={editingLesson.content}
                                 onChange={val => setEditingLesson(p => p ? ({ ...p, content: val || '' }) : p)}
-                                height={400}
+                                height={680}
                                 preview="live"
                               />
+                              {(() => {
+                                const raw = editingLesson.content || '';
+                                const stripped = raw.replace(/```[\s\S]*?```/g, '').replace(/[#*_`>\-\[\]!|]/g, ' ').trim();
+                                const words = stripped ? stripped.split(/\s+/).filter(Boolean).length : 0;
+                                const mins = Math.max(1, Math.round(words / 200));
+                                if (words === 0) return null;
+                                return (
+                                  <div style={{ fontSize: 11, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', marginTop: 6 }}>
+                                    {words.toLocaleString()} words, about {mins} min read
+                                  </div>
+                                );
+                              })()}
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: 16 }}>
                               <div>
