@@ -129,7 +129,7 @@ export default function Home() {
             fontSize: 25, fontWeight: 300,
             color: '#6B7280', letterSpacing: '0.06em',
             borderLeft: '1px solid #3A3F46', paddingLeft: 10,
-          }}>Academy</span>
+          }} className="dm-nav-academy">Academy</span>
         </div>
 
         {/* Auth buttons */}

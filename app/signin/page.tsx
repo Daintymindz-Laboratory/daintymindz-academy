@@ -45,7 +45,7 @@ export default function SignIn() {
           <span style={{
             fontSize: 15, fontWeight: 300, color: '#6B7280',
             borderLeft: '1px solid #3A3F46', paddingLeft: 10,
-          }}>Academy</span>
+          }} className="dm-nav-academy">Academy</span>
         </a>
 
         <a href="/signup" style={{ color: '#6B7280', fontSize: 14, textDecoration: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}>Sign up</a>

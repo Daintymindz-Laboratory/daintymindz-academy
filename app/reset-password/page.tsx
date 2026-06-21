@@ -51,7 +51,7 @@ export default function ResetPassword() {
       <nav style={{ borderBottom: '1px solid #2A2F35', padding: '0 2.5rem', height: 68, display: 'flex', alignItems: 'center' }}>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
           <Image src="/logo.png" alt="Daintymindz" width={110} height={40} style={{ objectFit: 'contain' }} />
-          <span style={{ fontSize: 15, fontWeight: 300, color: '#6B7280', borderLeft: '1px solid #3A3F46', paddingLeft: 10 }}>Academy</span>
+          <span className="dm-nav-academy" style={{ fontSize: 15, fontWeight: 300, color: '#6B7280', borderLeft: '1px solid #3A3F46', paddingLeft: 10 }}>Academy</span>
         </a>
       </nav>
 
