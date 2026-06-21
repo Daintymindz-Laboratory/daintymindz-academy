@@ -95,7 +95,7 @@ export default function Home() {
     },
     {
       code: 'DS',
-      name: 'Data Science & Analytics',
+      name: 'Data Analytics',
       desc: 'Python, statistics, pandas, SQL, dashboards and visualization',
       color: '#4E8FD4',
       glow: 'rgba(78,143,212,0.15)',

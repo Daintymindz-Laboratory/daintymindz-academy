@@ -14,7 +14,7 @@ type CertData = {
 
 const TRACKS: Record<string, { label: string; color: string }> = {
   AI: { label: 'Artificial Intelligence', color: '#D59C10' },
-  DS: { label: 'Data Science & Analytics', color: '#4E8FD4' },
+  DS: { label: 'Data Analytics', color: '#4E8FD4' },
   SE: { label: 'Software Engineering', color: '#4CAF7D' },
   DO: { label: 'Data Operations', color: '#9B6FD4' },
 };
