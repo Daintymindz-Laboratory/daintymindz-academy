@@ -53,12 +53,12 @@ export default function SignIn() {
       </nav>
 
       {/* BODY */}
-      <div style={{
+      <div className="dm-auth-body" style={{
         flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr',
       }}>
 
         {/* LEFT: branding panel */}
-        <div style={{
+        <div className="dm-auth-left" style={{
           borderRight: '1px solid #2A2F35',
           padding: '4rem',
           display: 'flex', flexDirection: 'column', justifyContent: 'center',

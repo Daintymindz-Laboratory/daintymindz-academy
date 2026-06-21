@@ -74,6 +74,9 @@ code, pre { font-family: 'JetBrains Mono', monospace; }
   .dm-hide-mobile { display: none !important; }
   .dm-hero { grid-template-columns: 1fr !important; }
   .dm-hero-left { padding: 2rem 1.25rem !important; border-right: none !important; }
+  /* Auth pages: hide left branding panel, form takes full width */
+  .dm-auth-body { grid-template-columns: 1fr !important; }
+  .dm-auth-left { display: none !important; }
   /* Scale down oversized inline font sizes */
   h1 { font-size: clamp(20px, 7vw, 32px) !important; }
   h2 { font-size: clamp(15px, 5vw, 22px) !important; }
