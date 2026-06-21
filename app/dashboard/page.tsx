@@ -147,9 +147,20 @@ function CourseCard({ course, recommended = false, onEnroll }: { course: Course;
 }
 
 export default function Dashboard() {
-
   const [user, setUser] = useState<UserProfile>({ name: '', track: 'AI', streak: 0, certsEarned: 0, isAdmin: false });
   const [userLoading, setUserLoading] = useState(true);
+  const [authUserId, setAuthUserId] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('dm-sidebar-collapsed') === '1';
+    return false;
+  });
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileBio, setProfileBio] = useState('');
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileUploading, setProfileUploading] = useState(false);
+  const fileInputRef = typeof window !== 'undefined' ? { current: null as HTMLInputElement | null } : { current: null as HTMLInputElement | null };
 
   const [allCourses, setAllCourses] = useState<Course[]>([]);
 
@@ -159,6 +170,8 @@ export default function Dashboard() {
       const supabase = createClient();
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) { window.location.href = '/signin'; return; }
+      setAuthUserId(authUser.id);
+      setAuthEmail(authUser.email || '');
 
       const [
         { data: profile, error: profileError },
@@ -189,6 +202,8 @@ export default function Dashboard() {
           certsEarned: certsCount,
           isAdmin: !!profile.is_admin,
         });
+        setProfileBio(profile.bio || '');
+        setProfileAvatarUrl(profile.avatar_url || '');
       }
 
       const enrolledIds = enrollments?.map((e: any) => e.course_id) || [];
@@ -230,6 +245,14 @@ export default function Dashboard() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTrack, setActiveTrack] = useState('All');
+
+  const toggleCollapse = () => {
+    setSidebarCollapsed(c => {
+      const next = !c;
+      localStorage.setItem('dm-sidebar-collapsed', next ? '1' : '0');
+      return next;
+    });
+  };
   const userTrack = user.track as keyof typeof TRACKS;
   const recommended = allCourses.filter(c => c.track === userTrack && !c.enrolled);
   const explore = allCourses.filter(c => c.track !== userTrack && !c.enrolled && (activeTrack === 'All' || c.track === activeTrack));
@@ -254,7 +277,7 @@ export default function Dashboard() {
         padding: '0 1.5rem', gap: 16,
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
       }}>
-        <button onClick={() => setSidebarOpen(o => !o)} style={{
+        <button onClick={() => { if (window.innerWidth < 769) setSidebarOpen(o => !o); else toggleCollapse(); }} style={{
           background: 'none', border: 'none', cursor: 'pointer',
           color: '#6B7280', fontSize: 20, padding: 4,
         }}>☰</button>
