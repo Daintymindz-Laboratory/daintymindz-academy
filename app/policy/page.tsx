@@ -84,7 +84,7 @@ const SECTIONS = [
       },
       {
         heading: '9. Contact',
-        body: 'For any privacy-related questions or data requests, please contact us at: hello@daintymindz.com',
+        body: 'For any privacy-related questions or data requests, please contact us at: info@daintymindz.com',
       },
     ],
   },
@@ -178,8 +178,8 @@ export default function PolicyPage() {
         }}>
           <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.7 }}>
             Questions about these policies? Contact us at{' '}
-            <a href="mailto:hello@daintymindz.com" style={{ color: '#D59C10', textDecoration: 'none' }}>
-              hello@daintymindz.com
+            <a href="mailto:info@daintymindz.com" style={{ color: '#D59C10', textDecoration: 'none' }}>
+              info@daintymindz.com
             </a>
             . By continuing to use Daintymindz Academy, you acknowledge that you have read and understood these Terms of Use and Privacy Policy.
           </div>
