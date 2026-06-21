@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { QRCodeCanvas as QRCode } from 'qrcode.react';
+import Head from 'next/head';
 
 type CertData = {
   cert_id: string;
@@ -62,7 +63,7 @@ export default function CertificateViewPage() {
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html><head>
 <title>Certificate - ${cert.courses?.title || ''}</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&family=Great+Vibes&display=swap" rel="stylesheet">
 <style>
 @page { size: A4 landscape; margin: 0; }
 * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; margin: 0; padding: 0; }
@@ -95,7 +96,7 @@ html, body { width: 297mm; height: 210mm; overflow: hidden; background: white; f
 .badge-track { background: ${trackColor}12; border: 1px solid ${trackColor}40; color: #A37808; }
 .badge-level { background: rgba(51,56,61,0.07); border: 1px solid rgba(51,56,61,0.18); color: #6B7280; }
 .bottom { display: grid; grid-template-columns: 1fr 1fr 1fr; width: 100%; align-items: end; gap: 20px; }
-.sig-name { font-family: Georgia, serif; font-style: italic; font-size: 36px; color: #33383D; margin-bottom: 5px; }
+.sig-name { font-family: 'Great Vibes', cursive; font-size: 46px; color: #33383D; margin-bottom: 5px; }
 .sig-line { height: 1px; background: #33383D; margin-bottom: 7px; }
 .sig-label { font-size: 16px; color: #6B7280; }
 .sig-sub { font-size: 14px; color: #9CA3AF; line-height: 1.5; }
@@ -200,6 +201,9 @@ html, body { width: 297mm; height: 210mm; overflow: hidden; background: white; f
 
   return (
     <div style={{ background: '#1A1D21', minHeight: '100vh', fontFamily: 'DM Sans, sans-serif', display: 'flex', flexDirection: 'column' }}>
+      <Head>
+        <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet" />
+      </Head>
 
       {/* NAV */}
       <nav style={{
@@ -299,7 +303,7 @@ html, body { width: 297mm; height: 210mm; overflow: hidden; background: white; f
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, alignItems: 'end' }}>
 
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 22, color: '#33383D', marginBottom: 4 }}>
+                  <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: 28, color: '#33383D', marginBottom: 4 }}>
                     Judith Vowels
                   </div>
                   <div style={{ height: 1, background: '#33383D', marginBottom: 6 }} />
