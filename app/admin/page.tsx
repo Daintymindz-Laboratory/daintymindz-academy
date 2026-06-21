@@ -613,7 +613,7 @@ export default function AdminPage() {
                               onChange={e => setEditingLesson(p => p ? ({ ...p, type: e.target.value }) : p)}>
                               <option value="lesson">Lesson (article + code)</option>
                               <option value="project">Project (Monaco editor)</option>
-                              <option value="quiz">Quiz (auto-graded, 70% pass)</option>
+                              <option value="quiz">Quiz (auto-graded, 80% pass)</option>
                               <option value="mini_project">Mini Project (code + test cases)</option>
                               <option value="assessment">Assessment (markdown)</option>
                             </select>

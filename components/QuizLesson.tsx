@@ -53,7 +53,7 @@ export default function QuizLesson({ lessonId, userId, trackColor, isCompleted, 
     if (saving) return;
     const correct = questions.filter(q => answers[q.id] === q.correct_answer).length;
     const total = questions.length;
-    const didPass = total > 0 && Math.round((correct / total) * 100) >= 70;
+    const didPass = total > 0 && Math.round((correct / total) * 100) >= 80;
     setScore(correct);
     setPassed(didPass);
     setSubmitted(true);
@@ -103,7 +103,7 @@ export default function QuizLesson({ lessonId, userId, trackColor, isCompleted, 
           letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 8,
         }}>Quiz</div>
         <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.6 }}>
-          Answer all {questions.length} questions. You need 70% or higher to pass.
+          Answer all {questions.length} questions. You need 80% or higher to pass.
         </p>
       </div>
 
@@ -118,7 +118,7 @@ export default function QuizLesson({ lessonId, userId, trackColor, isCompleted, 
           </div>
           <div style={{ fontSize: 14, color: '#9CA3AF' }}>
             You scored {score}/{questions.length} ({pct}%).
-            {!passed && ' You need 70% to pass. Review the answers below and try again.'}
+            {!passed && ' You need 80% to pass. Review the answers below and try again.'}
           </div>
           {!passed && (
             <button onClick={retry} style={{
