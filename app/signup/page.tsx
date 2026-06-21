@@ -44,7 +44,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 
   const tracks = [
     { code: 'AI', label: 'Artificial Intelligence' },
-    { code: 'DS', label: 'Data Analytics' },
+    { code: 'DA', label: 'Data Analytics' },
     { code: 'SE', label: 'Software Engineering' },
     { code: 'DO', label: 'Data Operations' },
   ];
@@ -129,7 +129,7 @@ const handleSubmit = async (e: React.FormEvent) => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[
                 { code: 'AI', label: 'Artificial Intelligence', color: '#D59C10' },
-                { code: 'DS', label: 'Data Analytics', color: '#4E8FD4' },
+                { code: 'DA', label: 'Data Analytics', color: '#4E8FD4' },
                 { code: 'SE', label: 'Software Engineering', color: '#4CAF7D' },
                 { code: 'DO', label: 'Data Operations', color: '#9B6FD4' },
               ].map(t => (

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [courseCounts, setCourseCounts] = useState<Record<string, number>>({ AI: 0, DS: 0, SE: 0, DO: 0, total: 0 });
+  const [courseCounts, setCourseCounts] = useState<Record<string, number>>({ AI: 0, DA: 0, SE: 0, DO: 0, total: 0 });
 
   useEffect(() => {
     const loadCounts = async () => {
@@ -12,7 +12,7 @@ export default function Home() {
       const supabase = createClient();
       const { data } = await supabase.from('courses').select('track');
       if (!data) return;
-      const counts: Record<string, number> = { AI: 0, DS: 0, SE: 0, DO: 0, total: data.length };
+      const counts: Record<string, number> = { AI: 0, DA: 0, SE: 0, DO: 0, total: data.length };
       data.forEach((c: any) => { if (counts[c.track] !== undefined) counts[c.track]++; });
       setCourseCounts(counts);
     };
@@ -94,7 +94,7 @@ export default function Home() {
       glow: 'rgba(213,156,16,0.15)',
     },
     {
-      code: 'DS',
+      code: 'DA',
       name: 'Data Analytics',
       desc: 'Python, statistics, pandas, SQL, dashboards and visualization',
       color: '#4E8FD4',

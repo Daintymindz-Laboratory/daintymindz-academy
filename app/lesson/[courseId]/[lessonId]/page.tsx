@@ -34,7 +34,7 @@ type Course = {
 
 const TRACKS: Record<string, { color: string }> = {
   AI: { color: '#D59C10' },
-  DS: { color: '#4E8FD4' },
+  DA: { color: '#4E8FD4' },
   SE: { color: '#4CAF7D' },
   DO: { color: '#9B6FD4' },
 };

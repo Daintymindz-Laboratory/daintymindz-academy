@@ -15,7 +15,7 @@ type Certificate = {
 
 const TRACKS: Record<string, { label: string; color: string; glow: string }> = {
   AI: { label: 'Artificial Intelligence', color: '#D59C10', glow: 'rgba(213,156,16,0.15)' },
-  DS: { label: 'Data Analytics', color: '#4E8FD4', glow: 'rgba(78,143,212,0.15)' },
+  DA: { label: 'Data Analytics', color: '#4E8FD4', glow: 'rgba(78,143,212,0.15)' },
   SE: { label: 'Software Engineering', color: '#4CAF7D', glow: 'rgba(76,175,125,0.15)' },
   DO: { label: 'Data Operations', color: '#9B6FD4', glow: 'rgba(155,111,212,0.15)' },
 };
