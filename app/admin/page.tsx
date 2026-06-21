@@ -243,6 +243,7 @@ export default function AdminPage() {
       return;
     }
     setSavingQuestion(true);
+    try {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
     const payload = {
@@ -272,6 +273,10 @@ export default function AdminPage() {
     setEditingQuestion(null);
     setSavingQuestion(false);
     showToast('Question saved.');
+    } catch (err: any) {
+      showToast(`Unexpected error: ${err?.message || String(err)}`);
+      setSavingQuestion(false);
+    }
   };
 
   const deleteQuestion = async (id: number) => {
@@ -387,7 +392,7 @@ export default function AdminPage() {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
     if (editingLesson.id) {
-      await supabase.from('lessons').update({
+      const { error } = await supabase.from('lessons').update({
         title: editingLesson.title,
         type: editingLesson.type,
         content: editingLesson.content,
@@ -400,9 +405,12 @@ export default function AdminPage() {
         order_index: editingLesson.order_index,
         is_published: editingLesson.is_published,
       }).eq('id', editingLesson.id);
+      if (error) { showToast(`Error: ${error.message}`); setSavingLesson(false); return; }
       showToast('Lesson updated!');
+      await loadLessons(selectedCourse.id!);
+      setSavingLesson(false);
     } else {
-      await supabase.from('lessons').insert({
+      const { data: inserted, error } = await supabase.from('lessons').insert({
         course_id: selectedCourse.id,
         title: editingLesson.title,
         type: editingLesson.type,
@@ -415,13 +423,13 @@ export default function AdminPage() {
         video_url: editingLesson.video_url,
         order_index: lessons.length + 1,
         is_published: editingLesson.is_published,
-      });
-      showToast('Lesson created!');
+      }).select().single();
+      if (error) { showToast(`Error: ${error.message}`); setSavingLesson(false); return; }
+      setEditingLesson(inserted);
+      await loadLessons(selectedCourse.id!);
+      setSavingLesson(false);
+      showToast('Lesson created! Now add your questions below.');
     }
-    await loadLessons(selectedCourse.id!);
-    setShowLessonForm(false);
-    setEditingLesson(null);
-    setSavingLesson(false);
   };
 
   const deleteLesson = async (id: number) => {
