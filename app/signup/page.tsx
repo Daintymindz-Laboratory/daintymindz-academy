@@ -29,7 +29,7 @@ export default function SignUp() {
   const handleGoogle = async () => {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
-    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/dashboard` } });
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/auth/callback` } });
   };
 
 const handleSubmit = async (e: React.FormEvent) => {
