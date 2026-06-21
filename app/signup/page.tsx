@@ -322,9 +322,9 @@ const handleSubmit = async (e: React.FormEvent) => {
 
             <p style={{ textAlign: 'center', fontSize: 13, color: '#3A3F46', marginTop: 20 }}>
               By signing up you agree to the{' '}
-              <a href="#" style={{ color: '#6B7280', textDecoration: 'none' }}>Terms of Use</a>
+              <a href="/policy#terms" style={{ color: '#D59C10', textDecoration: 'none' }}>Terms of Use</a>
               {' '}and{' '}
-              <a href="#" style={{ color: '#6B7280', textDecoration: 'none' }}>Privacy Policy</a>
+              <a href="/policy#privacy" style={{ color: '#D59C10', textDecoration: 'none' }}>Privacy Policy</a>
             </p>
 
             <div style={{
