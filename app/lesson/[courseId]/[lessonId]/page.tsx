@@ -247,9 +247,24 @@ export default function LessonPage() {
   const embedUrl = getVideoEmbed(currentLesson.video_url || '');
   const lessonType = currentLesson.type;
   const typeColor = TYPE_COLORS[lessonType] || '#D59C10';
+  const GATED_TYPES = ['quiz', 'mini_project'];
+  const needsPass = GATED_TYPES.includes(lessonType);
+  const canProceed = !needsPass || isCompleted;
+
   const prevBtn = <button onClick={() => prevLesson && switchLesson(prevLesson)} disabled={!prevLesson} style={{ padding: '9px 20px', borderRadius: 50, background: 'transparent', border: '1px solid #2A2F35', color: prevLesson ? '#F5F5F5' : '#3A3F46', fontSize: 13, fontWeight: 500, cursor: prevLesson ? 'pointer' : 'not-allowed', fontFamily: 'DM Sans, sans-serif' }}>Previous</button>;
-  const nextBtn = <button onClick={() => nextLesson && switchLesson(nextLesson)} disabled={!nextLesson} style={{ padding: '9px 20px', borderRadius: 50, background: 'transparent', border: '1px solid #2A2F35', color: nextLesson ? '#F5F5F5' : '#3A3F46', fontSize: 13, fontWeight: 500, cursor: nextLesson ? 'pointer' : 'not-allowed', fontFamily: 'DM Sans, sans-serif' }}>Next</button>;
-  const simpleNavBar = <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #2A2F35', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: 10 }}>{prevBtn}<div />{nextBtn}</div>;
+  const nextBtn = <button onClick={() => canProceed && nextLesson && switchLesson(nextLesson)} disabled={!nextLesson || !canProceed} style={{ padding: '9px 20px', borderRadius: 50, background: 'transparent', border: `1px solid ${!canProceed ? 'transparent' : '#2A2F35'}`, color: (!nextLesson || !canProceed) ? '#3A3F46' : '#F5F5F5', fontSize: 13, fontWeight: 500, cursor: (!nextLesson || !canProceed) ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>Next</button>;
+  const simpleNavBar = (
+    <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #2A2F35', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: 10 }}>
+      {prevBtn}
+      {needsPass && !isCompleted && nextLesson && (
+        <span style={{ fontSize: 12, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textAlign: 'center' }}>
+          Pass this {lessonType === 'quiz' ? 'quiz' : 'mini project'} to continue
+        </span>
+      )}
+      {!needsPass && <div />}
+      {nextBtn}
+    </div>
+  );
 
   return (
     <div style={{ background: '#1A1D21', height: '100vh', fontFamily: 'DM Sans, sans-serif', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
