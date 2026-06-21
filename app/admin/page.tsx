@@ -39,12 +39,14 @@ type Lesson = {
   is_published: boolean;
 };
 
-const TRACKS = {
+const FALLBACK_TRACKS: Record<string, { label: string; color: string }> = {
   AI: { label: 'Artificial Intelligence', color: '#D59C10' },
   DA: { label: 'Data Analytics', color: '#4E8FD4' },
   SE: { label: 'Software Engineering', color: '#4CAF7D' },
   DO: { label: 'Data Operations', color: '#9B6FD4' },
 };
+
+type Track = { code: string; label: string; color: string };
 
 const EMPTY_COURSE: Course = {
   title: '', track: 'AI', level: 'Beginner',
@@ -68,7 +70,10 @@ export default function AdminPage() {
 
   const [adminName, setAdminName] = useState('');
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks'>('courses');
+  const [tracks, setTracks] = useState<Track[]>(Object.entries(FALLBACK_TRACKS).map(([code, t]) => ({ code, ...t })));
+  const [editingTrack, setEditingTrack] = useState<Track | null>(null);
+  const [savingTrack, setSavingTrack] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [students, setStudents] = useState<Profile[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -118,6 +123,7 @@ export default function AdminPage() {
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (!profile?.is_admin) { window.location.href = '/dashboard'; return; }
       setAdminName(profile.full_name);
+      await loadTracks(supabase);
       await loadCourses(supabase);
       await loadStudents(supabase);
       await loadAnalytics(supabase);
@@ -125,6 +131,43 @@ export default function AdminPage() {
     };
     init();
   }, []);
+
+  const tracksMap = Object.fromEntries(tracks.map(t => [t.code, { label: t.label, color: t.color }]));
+
+  const loadTracks = async (supabase: any) => {
+    const { data } = await supabase.from('tracks').select('*').order('code');
+    if (data && data.length > 0) setTracks(data);
+  };
+
+  const saveTrack = async () => {
+    if (!editingTrack) return;
+    if (!editingTrack.code.trim() || !editingTrack.label.trim()) { showToast('Code and label are required.'); return; }
+    const code = editingTrack.code.trim().toUpperCase().replace(/\s+/g, '_');
+    setSavingTrack(true);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const isNew = !tracks.find(t => t.code === editingTrack.code);
+    if (isNew) {
+      const { error } = await supabase.from('tracks').insert({ code, label: editingTrack.label.trim(), color: editingTrack.color });
+      if (error) { showToast(`Error: ${error.message}`); setSavingTrack(false); return; }
+    } else {
+      const { error } = await supabase.from('tracks').update({ label: editingTrack.label.trim(), color: editingTrack.color }).eq('code', editingTrack.code);
+      if (error) { showToast(`Error: ${error.message}`); setSavingTrack(false); return; }
+    }
+    await loadTracks(supabase);
+    setEditingTrack(null);
+    setSavingTrack(false);
+    showToast('Track saved.');
+  };
+
+  const deleteTrack = async (code: string) => {
+    if (!confirm(`Delete track "${code}"? Courses using this track will keep their track code.`)) return;
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    await supabase.from('tracks').delete().eq('code', code);
+    await loadTracks(supabase);
+    showToast('Track deleted.');
+  };
 
   const loadCourses = async (supabase: any) => {
     const { data } = await supabase.from('courses').select('*').order('id');
@@ -504,6 +547,7 @@ export default function AdminPage() {
               { id: 'lessons', label: 'Lesson Builder', icon: '✦' },
               { id: 'students', label: 'Students', icon: '⊞' },
               { id: 'analytics', label: 'Analytics', icon: '◈' },
+              { id: 'tracks', label: 'Tracks', icon: '◑' },
             ].map(item => (
               <div key={item.id} onClick={() => setActiveTab(item.id as any)} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
@@ -554,8 +598,8 @@ export default function AdminPage() {
                     <div>
                       <label style={labelStyle}>Track</label>
                       <select style={{ ...inputStyle, cursor: 'pointer' }} value={editingCourse.track} onChange={e => setEditingCourse(p => ({ ...p, track: e.target.value }))}>
-                        {Object.entries(TRACKS).map(([code, t]) => (
-                          <option key={code} value={code}>{t.label}</option>
+                        {tracks.map(t => (
+                          <option key={t.code} value={t.code}>{t.label}</option>
                         ))}
                       </select>
                     </div>
@@ -604,7 +648,7 @@ export default function AdminPage() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {courses.map(course => {
-                  const track = TRACKS[course.track as keyof typeof TRACKS];
+                  const track = tracksMap[course.track];
                   return (
                     <div key={course.id} style={{
                       background: '#22262B', border: '1px solid #2A2F35',
@@ -1165,7 +1209,7 @@ export default function AdminPage() {
                       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>Top Enrolled Courses</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {analytics.enrollmentsByCourse.map((c, i) => {
-                          const tColor = TRACKS[c.track as keyof typeof TRACKS]?.color || '#D59C10';
+                          const tColor = tracksMap[c.track]?.color || '#D59C10';
                           return (
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                               <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', width: 16 }}>{i + 1}</span>
@@ -1185,7 +1229,7 @@ export default function AdminPage() {
                       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#4CAF7D', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>Avg Completion by Course</div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {analytics.avgCompletionByCourse.map((c, i) => {
-                          const tColor = TRACKS[c.track as keyof typeof TRACKS]?.color || '#D59C10';
+                          const tColor = tracksMap[c.track]?.color || '#D59C10';
                           return (
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                               <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', width: 16 }}>{i + 1}</span>
@@ -1228,7 +1272,7 @@ export default function AdminPage() {
                   </thead>
                   <tbody>
                     {students.map(s => {
-                      const track = TRACKS[s.track as keyof typeof TRACKS];
+                      const track = tracksMap[s.track];
                       return (
                         <tr key={s.id} onClick={() => openStudentDetail(s)} style={{ borderBottom: '1px solid #2A2F35', cursor: 'pointer', transition: 'background 0.15s' }}
                           onMouseEnter={e => (e.currentTarget.style.background = 'rgba(213,156,16,0.04)')}
@@ -1265,6 +1309,67 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+          {/* TRACKS */}
+          {activeTab === 'tracks' && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                <div>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// tracks'}</div>
+                  <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5', letterSpacing: '-0.02em' }}>Tracks</h1>
+                  <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>Tracks appear in course creation, signup, and student profiles.</p>
+                </div>
+                <button onClick={() => setEditingTrack({ code: '', label: '', color: '#6B7280' })} style={{ background: '#D59C10', border: 'none', borderRadius: 50, padding: '10px 22px', fontSize: 13, fontWeight: 700, color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>+ New Track</button>
+              </div>
+
+              {editingTrack && (
+                <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '1.5rem', marginBottom: 24 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#F5F5F5', marginBottom: 16 }}>{tracks.find(t => t.code === editingTrack.code) ? 'Edit Track' : 'New Track'}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 12, marginBottom: 16 }}>
+                    <div>
+                      <label style={labelStyle}>Code (short, e.g. PM)</label>
+                      <input style={inputStyle} value={editingTrack.code} onChange={e => setEditingTrack(t => t ? ({ ...t, code: e.target.value.toUpperCase().replace(/\s+/g, '_') }) : t)} placeholder="PM" disabled={!!tracks.find(t => t.code === editingTrack.code)} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Label</label>
+                      <input style={inputStyle} value={editingTrack.label} onChange={e => setEditingTrack(t => t ? ({ ...t, label: e.target.value }) : t)} placeholder="Project Management" />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Color</label>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <input type="color" value={editingTrack.color} onChange={e => setEditingTrack(t => t ? ({ ...t, color: e.target.value }) : t)} style={{ width: 42, height: 42, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }} />
+                        <input style={{ ...inputStyle, flex: 1 }} value={editingTrack.color} onChange={e => setEditingTrack(t => t ? ({ ...t, color: e.target.value }) : t)} placeholder="#6B7280" />
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <button onClick={saveTrack} disabled={savingTrack} style={{ background: '#D59C10', border: 'none', borderRadius: 50, padding: '8px 22px', fontSize: 13, fontWeight: 700, color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>{savingTrack ? 'Saving...' : 'Save Track'}</button>
+                    <button onClick={() => setEditingTrack(null)} style={{ background: 'transparent', border: '1px solid #3A3F46', borderRadius: 50, padding: '8px 22px', fontSize: 13, color: '#6B7280', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>Cancel</button>
+                    <div style={{ marginLeft: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: `${editingTrack.color}20`, border: `1px solid ${editingTrack.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fontWeight: 700, color: editingTrack.color, letterSpacing: '0.06em' }}>{editingTrack.code || 'XX'}</div>
+                      <span style={{ fontSize: 13, color: '#6B7280' }}>{editingTrack.label || 'Track label'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {tracks.map(t => (
+                  <div key={t.code} style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: 8, background: `${t.color}20`, border: `1px solid ${t.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fontWeight: 700, color: t.color, letterSpacing: '0.06em', flexShrink: 0 }}>{t.code}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#F5F5F5' }}>{t.label}</div>
+                      <div style={{ fontSize: 11, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', marginTop: 2 }}>{t.color}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => setEditingTrack({ ...t })} style={{ background: 'transparent', border: '1px solid #3A3F46', borderRadius: 20, padding: '5px 14px', fontSize: 12, color: '#F5F5F5', cursor: 'pointer' }}>Edit</button>
+                      <button onClick={() => deleteTrack(t.code)} style={{ background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 20, padding: '5px 14px', fontSize: 12, color: '#F87171', cursor: 'pointer' }}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
         </main>
       </div>
 
@@ -1295,7 +1400,7 @@ export default function AdminPage() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {selectedStudent.enrollments.map(e => {
-                    const tColor = TRACKS[e.track as keyof typeof TRACKS]?.color || '#D59C10';
+                    const tColor = tracksMap[e.track]?.color || '#D59C10';
                     return (
                       <div key={e.course_id} style={{ background: '#1A1D21', borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
                         <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, padding: '2px 8px', borderRadius: 20, background: `${tColor}15`, color: tColor }}>{e.track}</span>

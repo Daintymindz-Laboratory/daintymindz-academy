@@ -1,6 +1,6 @@
 'use client';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function SignUp() {
   const [name, setName] = useState('');
@@ -9,6 +9,22 @@ export default function SignUp() {
   const [track, setTrack] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [tracks, setTracks] = useState([
+    { code: 'AI', label: 'Artificial Intelligence', color: '#D59C10' },
+    { code: 'DA', label: 'Data Analytics', color: '#4E8FD4' },
+    { code: 'SE', label: 'Software Engineering', color: '#4CAF7D' },
+    { code: 'DO', label: 'Data Operations', color: '#9B6FD4' },
+  ]);
+
+  useEffect(() => {
+    const load = async () => {
+      const { createClient } = await import('@/lib/supabase');
+      const supabase = createClient();
+      const { data } = await supabase.from('tracks').select('*').order('code');
+      if (data && data.length > 0) setTracks(data);
+    };
+    load();
+  }, []);
 
   const handleGoogle = async () => {
     const { createClient } = await import('@/lib/supabase');
@@ -41,13 +57,6 @@ const handleSubmit = async (e: React.FormEvent) => {
       setLoading(false);
     }
   };
-
-  const tracks = [
-    { code: 'AI', label: 'Artificial Intelligence' },
-    { code: 'DA', label: 'Data Analytics' },
-    { code: 'SE', label: 'Software Engineering' },
-    { code: 'DO', label: 'Data Operations' },
-  ];
 
   return (
     <div style={{
@@ -127,12 +136,7 @@ const handleSubmit = async (e: React.FormEvent) => {
 
             {/* Track preview */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {[
-                { code: 'AI', label: 'Artificial Intelligence', color: '#D59C10' },
-                { code: 'DA', label: 'Data Analytics', color: '#4E8FD4' },
-                { code: 'SE', label: 'Software Engineering', color: '#4CAF7D' },
-                { code: 'DO', label: 'Data Operations', color: '#9B6FD4' },
-              ].map(t => (
+              {tracks.map(t => (
                 <div key={t.code} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{
                     width: 32, height: 32, borderRadius: 8,
