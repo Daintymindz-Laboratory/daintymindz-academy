@@ -1,4 +1,5 @@
 'use client';
+import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import RunnableCodeCell from './RunnableCodeCell';
 
@@ -14,6 +15,61 @@ export default function LessonContent({ content, trackColor, workerRef, pyodideR
     <div style={{ fontSize: 15, lineHeight: 1.8, color: '#9CA3AF' }}>
       <ReactMarkdown
         components={{
+          /*
+           * Handle fenced code blocks at the `pre` level.
+           * In react-markdown v10 (hast-util-to-jsx-runtime), the `pre` component
+           * receives the child `code` element as a React element before it is rendered.
+           * We inspect the child className here to detect python-run blocks and render
+           * RunnableCodeCell directly, with no wrapping pre element.
+           */
+          pre: ({ children }) => {
+            const childArray = React.Children.toArray(children);
+            const first = childArray[0] as React.ReactElement<{ className?: string; children?: React.ReactNode }> | undefined;
+            const childClassName: string = first?.props?.className || '';
+            const match = /language-([\w-]+)/.exec(childClassName);
+            const lang = match ? match[1] : '';
+
+            if (lang === 'python-run') {
+              const code = String(first?.props?.children ?? '').replace(/\n$/, '');
+              return (
+                <RunnableCodeCell
+                  initialCode={code}
+                  workerRef={workerRef}
+                  pyodideReady={pyodideReady}
+                />
+              );
+            }
+
+            return (
+              <pre style={{
+                background: '#0D1117', borderRadius: 10, padding: '1rem 1.25rem',
+                overflow: 'auto', margin: '1rem 0', border: '1px solid #2A2F35',
+              }}>
+                {children}
+              </pre>
+            );
+          },
+
+          /* inline code only (no className means inline) */
+          code: ({ children, className }: any) => {
+            if (className) {
+              return (
+                <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#E5E7EB', lineHeight: 1.7 }}>
+                  {children}
+                </code>
+              );
+            }
+            return (
+              <code style={{
+                background: '#22262B', border: '1px solid #3A3F46',
+                borderRadius: 4, padding: '2px 6px',
+                fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: trackColor,
+              }}>
+                {children}
+              </code>
+            );
+          },
+
           h1: ({ children }) => (
             <h1 style={{ fontSize: 22, fontWeight: 700, color: '#F5F5F5', margin: '1.75rem 0 0.75rem', letterSpacing: '-0.02em' }}>{children}</h1>
           ),
@@ -48,36 +104,6 @@ export default function LessonContent({ content, trackColor, workerRef, pyodideR
               padding: '12px 16px',
             }}>{children}</blockquote>
           ),
-          code: ({ children, className }: any) => {
-            const lang = className?.replace('language-', '') || '';
-            const raw = String(children).replace(/\n$/, '');
-
-            if (lang === 'python-run') {
-              return (
-                <RunnableCodeCell
-                  initialCode={raw}
-                  workerRef={workerRef}
-                  pyodideReady={pyodideReady}
-                />
-              );
-            }
-
-            const isBlock = Boolean(className);
-            return isBlock ? (
-              <pre style={{
-                background: '#0D1117', borderRadius: 10, padding: '1rem 1.25rem',
-                overflow: 'auto', margin: '1rem 0', border: '1px solid #2A2F35',
-              }}>
-                <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: '#E5E7EB', lineHeight: 1.7 }}>{children}</code>
-              </pre>
-            ) : (
-              <code style={{
-                background: '#22262B', border: '1px solid #3A3F46',
-                borderRadius: 4, padding: '2px 6px',
-                fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: trackColor,
-              }}>{children}</code>
-            );
-          },
         }}
       >
         {content}
