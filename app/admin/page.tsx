@@ -640,22 +640,7 @@ export default function AdminPage() {
                         {editingLesson.type === 'lesson' && (
                           <>
                             <div data-color-mode="dark">
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                                <label style={labelStyle}>Lesson Content, Markdown supported</label>
-                                {editingLesson.id && selectedCourse?.id && (
-                                  <button
-                                    onClick={() => window.open(`/lesson/${selectedCourse.id}/${editingLesson.id}`, '_blank')}
-                                    style={{
-                                      background: 'transparent', border: '1px solid #3A3F46',
-                                      borderRadius: 20, padding: '5px 14px',
-                                      fontSize: 12, color: '#9CA3AF', cursor: 'pointer',
-                                      fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 6,
-                                    }}
-                                  >
-                                    <span style={{ fontSize: 11 }}>↗</span> Preview as Student
-                                  </button>
-                                )}
-                              </div>
+                              <label style={{ ...labelStyle, marginBottom: 10 }}>Lesson Content, Markdown supported</label>
                               <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 8, fontFamily: 'JetBrains Mono, monospace' }}>
                                 Use # for headings · **bold** · *italic* · - for lists · {'>'} for quotes · ```python-run for interactive cells
                               </div>
@@ -931,13 +916,26 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: 10, marginTop: '1.5rem' }}>
+                      <div style={{ display: 'flex', gap: 10, marginTop: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                         <button onClick={saveLesson} disabled={savingLesson} style={{
                           background: '#D59C10', border: 'none', borderRadius: 50,
                           padding: '10px 28px', fontSize: 14, fontWeight: 700,
                           color: '#1A1D21', cursor: savingLesson ? 'not-allowed' : 'pointer',
                           fontFamily: 'DM Sans, sans-serif',
                         }}>{savingLesson ? 'Saving...' : editingLesson.id ? 'Update Lesson' : 'Create Lesson'}</button>
+                        {editingLesson.id && selectedCourse?.id && (
+                          <button
+                            onClick={() => window.open(`/lesson/${selectedCourse.id}/${editingLesson.id}`, '_blank')}
+                            style={{
+                              background: 'transparent', border: '1px solid #3A3F46', borderRadius: 50,
+                              padding: '10px 22px', fontSize: 14, color: '#9CA3AF',
+                              cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                              display: 'flex', alignItems: 'center', gap: 6,
+                            }}
+                          >
+                            <span>↗</span> Preview as Student
+                          </button>
+                        )}
                         <button onClick={() => { setShowLessonForm(false); setEditingLesson(null); }} style={{
                           background: 'transparent', border: '1px solid #3A3F46', borderRadius: 50,
                           padding: '10px 28px', fontSize: 14, color: '#6B7280',
