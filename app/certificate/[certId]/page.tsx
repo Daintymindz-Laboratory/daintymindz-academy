@@ -9,7 +9,17 @@ type CertData = {
   cert_id: string;
   issued_at: string;
   profiles: { full_name: string };
-  courses: { title: string; track: string; level: string };
+  courses: {
+    title: string;
+    track: string;
+    level: string;
+    created_by: string | null;
+  };
+};
+
+type CreatorProfile = {
+  full_name: string;
+  position: string | null;
 };
 
 const TRACKS: Record<string, { label: string; color: string }> = {
@@ -24,6 +34,7 @@ export default function CertificateViewPage() {
   const params = useParams();
   const certId = params.certId as string;
   const [cert, setCert] = useState<CertData | null>(null);
+  const [creator, setCreator] = useState<CreatorProfile | null>(null);
   const [sealUrl, setSealUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -38,10 +49,20 @@ export default function CertificateViewPage() {
 
       const { data } = await supabase
         .from('certificates')
-        .select('*, profiles(full_name), courses(title, track, level)')
+        .select('*, profiles(full_name), courses(title, track, level, created_by)')
         .eq('cert_id', certId)
         .single();
-      if (data) setCert(data);
+      if (data) {
+        setCert(data);
+        if (data.courses?.created_by) {
+          const { data: creatorData } = await supabase
+            .from('profiles')
+            .select('full_name, position')
+            .eq('id', data.courses.created_by)
+            .single();
+          if (creatorData) setCreator(creatorData);
+        }
+      }
 
       const { data: signedData } = await supabase.storage
         .from('assets')
@@ -137,10 +158,10 @@ html, body { width: 297mm; height: 210mm; overflow: hidden; background: white; f
 
   <div class="bottom">
     <div style="text-align:center">
-      <div class="sig-name">Judith Vowels</div>
+      <div class="sig-name">${creator?.full_name || 'Daintymindz Academy'}</div>
       <div class="sig-line"></div>
-      <div class="sig-label">Dr. Judith Vowels</div>
-      <div class="sig-sub">Research Director<br>Daintymindz Academy</div>
+      <div class="sig-label">${creator?.full_name || ''}</div>
+      <div class="sig-sub">${creator?.position || 'Course Instructor'}<br>Daintymindz Academy</div>
     </div>
     <div class="seal-col">
       ${sealUrl
@@ -302,11 +323,11 @@ html, body { width: 297mm; height: 210mm; overflow: hidden; background: white; f
 
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: 28, color: '#33383D', marginBottom: 4 }}>
-                    Judith Vowels
+                    {creator?.full_name || 'Daintymindz Academy'}
                   </div>
                   <div style={{ height: 1, background: '#33383D', marginBottom: 6 }} />
-                  <div style={{ fontSize: 11, color: '#6B7280' }}>Dr. Judith Vowels</div>
-                  <div style={{ fontSize: 10, color: '#9CA3AF' }}>Research Director</div>
+                  <div style={{ fontSize: 11, color: '#6B7280' }}>{creator?.full_name || ''}</div>
+                  <div style={{ fontSize: 10, color: '#9CA3AF' }}>{creator?.position || 'Course Instructor'}</div>
                   <div style={{ fontSize: 10, color: '#9CA3AF' }}>Daintymindz Academy</div>
                 </div>
 

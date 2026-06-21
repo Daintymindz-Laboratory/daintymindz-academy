@@ -13,6 +13,7 @@ type Course = {
   lessons_count: number;
   duration: string;
   description: string;
+  created_by?: string | null;
 };
 
 type Profile = {
@@ -69,6 +70,10 @@ export default function AdminPage() {
   };
 
   const [adminName, setAdminName] = useState('');
+  const [adminId, setAdminId] = useState('');
+  const [adminPosition, setAdminPosition] = useState('');
+  const [adminProfileSaving, setAdminProfileSaving] = useState(false);
+  const [adminProfiles, setAdminProfiles] = useState<{ id: string; full_name: string; position: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks'>('courses');
   const [tracks, setTracks] = useState<Track[]>(Object.entries(FALLBACK_TRACKS).map(([code, t]) => ({ code, ...t })));
@@ -123,10 +128,14 @@ export default function AdminPage() {
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (!profile?.is_admin) { window.location.href = '/dashboard'; return; }
       setAdminName(profile.full_name);
+      setAdminId(user.id);
+      setAdminPosition(profile.position || '');
       await loadTracks(supabase);
       await loadCourses(supabase);
       await loadStudents(supabase);
       await loadAnalytics(supabase);
+      const { data: admins } = await supabase.from('profiles').select('id, full_name, position').eq('is_admin', true).order('full_name');
+      if (admins) setAdminProfiles(admins);
       setLoading(false);
     };
     init();
@@ -383,6 +392,7 @@ export default function AdminPage() {
         lessons_count: editingCourse.lessons_count,
         duration: editingCourse.duration,
         description: editingCourse.description,
+        created_by: editingCourse.created_by || adminId,
       }).eq('id', editingCourse.id);
       showToast('Course updated!');
     } else {
@@ -393,6 +403,7 @@ export default function AdminPage() {
         lessons_count: editingCourse.lessons_count,
         duration: editingCourse.duration,
         description: editingCourse.description,
+        created_by: editingCourse.created_by || adminId,
       });
       showToast('Course created!');
     }
@@ -618,6 +629,14 @@ export default function AdminPage() {
                     <div>
                       <label style={labelStyle}>Duration</label>
                       <input style={inputStyle} value={editingCourse.duration} onChange={e => setEditingCourse(p => ({ ...p, duration: e.target.value }))} placeholder="e.g. 4h 30m" />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Course Creator (for certificate)</label>
+                      <select style={{ ...inputStyle, cursor: 'pointer' }} value={editingCourse.created_by || adminId} onChange={e => setEditingCourse(p => ({ ...p, created_by: e.target.value }))}>
+                        {adminProfiles.map(a => (
+                          <option key={a.id} value={a.id}>{a.full_name}{a.position ? ` (${a.position})` : ''}</option>
+                        ))}
+                      </select>
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={labelStyle}>Description *</label>
@@ -1309,6 +1328,40 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+          {/* MY PROFILE */}
+          {activeTab === 'tracks' && (
+            <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '1.5rem', marginBottom: 32 }}>
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 12 }}>{'// my profile'}</div>
+              <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>Your name and position appear on certificates for courses you created.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                <div>
+                  <label style={labelStyle}>Display Name</label>
+                  <input style={inputStyle} value={adminName} onChange={e => setAdminName(e.target.value)} placeholder="Your full name" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Position / Title</label>
+                  <input style={inputStyle} value={adminPosition} onChange={e => setAdminPosition(e.target.value)} placeholder="e.g. Research Director" />
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 12 }}>
+                Certificate preview: <span style={{ fontFamily: "'Georgia', serif", color: '#F5F5F5', fontStyle: 'italic' }}>{adminName || 'Your Name'}</span>, <span style={{ color: '#9CA3AF' }}>{adminPosition || 'Position'}</span>, Daintymindz Academy
+              </div>
+              <button disabled={adminProfileSaving} onClick={async () => {
+                if (!adminId) return;
+                setAdminProfileSaving(true);
+                const { createClient } = await import('@/lib/supabase');
+                const supabase = createClient();
+                await supabase.from('profiles').update({ full_name: adminName.trim(), position: adminPosition.trim() }).eq('id', adminId);
+                const { data: admins } = await supabase.from('profiles').select('id, full_name, position').eq('is_admin', true).order('full_name');
+                if (admins) setAdminProfiles(admins);
+                setAdminProfileSaving(false);
+                showToast('Profile saved.');
+              }} style={{ background: '#D59C10', border: 'none', borderRadius: 50, padding: '8px 22px', fontSize: 13, fontWeight: 700, color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                {adminProfileSaving ? 'Saving...' : 'Save Profile'}
+              </button>
+            </div>
+          )}
+
           {/* TRACKS */}
           {activeTab === 'tracks' && (
             <div>
