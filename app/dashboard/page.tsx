@@ -315,13 +315,16 @@ export default function Dashboard() {
         </div>
 
         {/* Avatar */}
-        <div style={{
+        <div onClick={() => setProfileOpen(true)} style={{
           width: 36, height: 36, borderRadius: '50%',
-          background: '#D59C10', color: '#1A1D21',
+          background: profileAvatarUrl ? 'transparent' : '#D59C10', color: '#1A1D21',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0,
+          overflow: 'hidden', border: '2px solid #D59C10',
         }}>
-          {user.name.split(' ').map(n => n[0]).join('')}
+          {profileAvatarUrl
+            ? <img src={profileAvatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : user.name.split(' ').map(n => n[0]).join('')}
         </div>
       </nav>
 
@@ -333,7 +336,7 @@ export default function Dashboard() {
           className={`dm-sidebar-backdrop${sidebarOpen ? ' open' : ''}`}
           onClick={() => setSidebarOpen(false)}
         />
-        <aside className={`dm-sidebar${sidebarOpen ? ' open' : ''}`} style={{ padding: '1.5rem 0' }}>
+        <aside className={`dm-sidebar${sidebarOpen ? ' open' : ''}${sidebarCollapsed ? ' dm-collapsed' : ''}`} style={{ padding: '1.5rem 0' }}>
             <div style={{ padding: '0 1rem', marginBottom: '1.5rem' }}>
               <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>
                 Navigation
@@ -433,7 +436,7 @@ export default function Dashboard() {
           </aside>
 
         {/* MAIN */}
-        <main className="dm-main" style={{
+        <main className={`dm-main${sidebarCollapsed ? ' dm-collapsed' : ''}`} style={{
           flex: 1,
           marginLeft: 240,
           padding: '2.5rem',
