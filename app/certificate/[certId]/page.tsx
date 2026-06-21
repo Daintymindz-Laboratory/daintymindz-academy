@@ -201,9 +201,7 @@ html, body { width: 297mm; height: 210mm; overflow: hidden; background: white; f
 
   return (
     <div style={{ background: '#1A1D21', minHeight: '100vh', fontFamily: 'DM Sans, sans-serif', display: 'flex', flexDirection: 'column' }}>
-      <Head>
-        <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet" />
-      </Head>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap');`}</style>
 
       {/* NAV */}
       <nav style={{
