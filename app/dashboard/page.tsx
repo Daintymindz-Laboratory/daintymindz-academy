@@ -542,6 +542,147 @@ export default function Dashboard() {
           </div>
         </main>
       </div>
+
+      {/* Profile panel backdrop */}
+      <div className={`dm-profile-backdrop${profileOpen ? ' open' : ''}`} onClick={() => setProfileOpen(false)} />
+
+      {/* Profile panel */}
+      <div className={`dm-profile-panel${profileOpen ? ' open' : ''}`}>
+        <div style={{ padding: '1.5rem', borderBottom: '1px solid #2A2F35', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: '#F5F5F5' }}>My Profile</span>
+          <button onClick={() => setProfileOpen(false)} style={{ background: 'none', border: 'none', color: '#6B7280', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+
+        <div style={{ padding: '2rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', flex: 1 }}>
+          {/* Avatar */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 80, height: 80, borderRadius: '50%', overflow: 'hidden',
+              background: profileAvatarUrl ? 'transparent' : '#D59C10',
+              border: '3px solid #D59C10',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#1A1D21', fontWeight: 700, fontSize: 24,
+            }}>
+              {profileAvatarUrl
+                ? <img src={profileAvatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : user.name.split(' ').map(n => n[0]).join('')}
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              ref={el => { fileInputRef.current = el; }}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file || !authUserId) return;
+                setProfileUploading(true);
+                const ext = file.name.split('.').pop();
+                const path = `${authUserId}.${ext}`;
+                const { createClient } = await import('@/lib/supabase');
+                const supabase = createClient();
+                const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
+                if (!upErr) {
+                  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+                  const url = urlData.publicUrl;
+                  await supabase.from('profiles').update({ avatar_url: url }).eq('id', authUserId);
+                  setProfileAvatarUrl(url);
+                }
+                setProfileUploading(false);
+                e.target.value = '';
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={profileUploading}
+              style={{
+                background: 'transparent', border: '1px solid #3A3F46',
+                borderRadius: 50, padding: '6px 18px',
+                color: '#9CA3AF', fontSize: 12, cursor: 'pointer',
+                fontFamily: 'DM Sans, sans-serif',
+              }}
+            >
+              {profileUploading ? 'Uploading...' : 'Change photo'}
+            </button>
+          </div>
+
+          {/* Name */}
+          <div>
+            <label style={{ fontSize: 11, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Name</label>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#F5F5F5', padding: '10px 14px', background: '#22262B', borderRadius: 10, border: '1px solid #2A2F35' }}>
+              {user.name}
+            </div>
+          </div>
+
+          {/* Email */}
+          <div>
+            <label style={{ fontSize: 11, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Email</label>
+            <div style={{ fontSize: 14, color: '#9CA3AF', padding: '10px 14px', background: '#22262B', borderRadius: 10, border: '1px solid #2A2F35' }}>
+              {authEmail}
+            </div>
+          </div>
+
+          {/* Track */}
+          <div>
+            <label style={{ fontSize: 11, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Track</label>
+            <div style={{ fontSize: 14, fontWeight: 600, color: TRACKS[userTrack].color, padding: '10px 14px', background: `${TRACKS[userTrack].color}0D`, borderRadius: 10, border: `1px solid ${TRACKS[userTrack].color}25` }}>
+              {TRACKS[userTrack].label}
+            </div>
+          </div>
+
+          {/* Bio */}
+          <div>
+            <label style={{ fontSize: 11, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Bio</label>
+            <textarea
+              value={profileBio}
+              onChange={e => setProfileBio(e.target.value)}
+              placeholder="Tell us about yourself..."
+              rows={4}
+              style={{
+                width: '100%', background: '#22262B', border: '1px solid #2A2F35',
+                borderRadius: 10, padding: '10px 14px',
+                color: '#F5F5F5', fontSize: 14, fontFamily: 'DM Sans, sans-serif',
+                resize: 'vertical', outline: 'none', lineHeight: 1.6,
+              }}
+            />
+          </div>
+
+          {/* Save */}
+          <button
+            disabled={profileSaving}
+            onClick={async () => {
+              if (!authUserId) return;
+              setProfileSaving(true);
+              const { createClient } = await import('@/lib/supabase');
+              const supabase = createClient();
+              await supabase.from('profiles').update({ bio: profileBio }).eq('id', authUserId);
+              setProfileSaving(false);
+            }}
+            style={{
+              padding: '11px 0', borderRadius: 50,
+              background: profileSaving ? '#2A2F35' : '#D59C10',
+              color: profileSaving ? '#6B7280' : '#1A1D21',
+              border: 'none', fontWeight: 700, fontSize: 14,
+              cursor: profileSaving ? 'not-allowed' : 'pointer',
+              fontFamily: 'DM Sans, sans-serif', width: '100%',
+            }}
+          >
+            {profileSaving ? 'Saving...' : 'Save changes'}
+          </button>
+
+          {/* Sign out */}
+          <button onClick={async () => {
+            const { createClient } = await import('@/lib/supabase');
+            const supabase = createClient();
+            await supabase.auth.signOut();
+            window.location.href = '/';
+          }} style={{
+            padding: '10px 0', borderRadius: 50, width: '100%',
+            background: 'transparent', border: '1px solid #3A3F46',
+            color: '#6B7280', fontSize: 13, cursor: 'pointer',
+            fontFamily: 'DM Sans, sans-serif',
+          }}>Sign out</button>
+        </div>
+      </div>
     </div>
   );
 }
