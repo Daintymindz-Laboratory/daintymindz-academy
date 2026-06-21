@@ -213,7 +213,7 @@ export default function SignIn() {
 
               {/* Forgot password */}
               <div style={{ textAlign: 'right', marginBottom: 28 }}>
-                <a href="#" style={{
+                <a href="/forgot-password" style={{
                   fontSize: 13, color: '#6B7280', textDecoration: 'none',
                 }}
                   onMouseEnter={e => (e.currentTarget.style.color = '#D59C10')}

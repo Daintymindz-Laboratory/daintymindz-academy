@@ -134,13 +134,7 @@ export default function Home() {
 
         {/* Nav links */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
-          {['Courses', 'Tracks', 'About'].map(item => (
-            <a key={item} href="#" style={{ color: '#6B7280', fontSize: 14, fontWeight: 500, textDecoration: 'none', transition: 'color 0.15s' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#F5F5F5')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#6B7280')}
-            >{item}</a>
-          ))}
-          <a
+          <
             href="https://daintymindz.com"
             target="_blank"
             rel="noopener noreferrer"

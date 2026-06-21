@@ -33,6 +33,8 @@ export default function MyCoursesPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unenrolling, setUnenrolling] = useState<number | null>(null);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -99,6 +101,19 @@ export default function MyCoursesPage() {
     };
     init();
   }, []);
+
+  const unenroll = async (courseId: number) => {
+    setUnenrolling(courseId);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('enrollments').delete().eq('user_id', user.id).eq('course_id', courseId);
+    await supabase.from('progress').delete().eq('user_id', user.id).eq('course_id', courseId);
+    setCourses(prev => prev.filter(c => c.id !== courseId));
+    setUnenrolling(null);
+    setConfirmId(null);
+  };
 
   if (loading) return (
     <div style={{ background: '#1A1D21', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -276,6 +291,51 @@ export default function MyCoursesPage() {
                     >
                       {course.progress === 100 ? 'Review course' : course.progress > 0 ? 'Continue' : 'Start course'}
                     </button>
+
+                    {confirmId === course.id ? (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={() => unenroll(course.id)}
+                          disabled={unenrolling === course.id}
+                          style={{
+                            flex: 1, padding: '8px 0', borderRadius: 50,
+                            background: 'rgba(220,38,38,0.1)', border: '1px solid rgba(220,38,38,0.4)',
+                            color: '#F87171', fontSize: 12, fontWeight: 700,
+                            cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                          }}
+                        >
+                          {unenrolling === course.id ? 'Removing...' : 'Yes, unenroll'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmId(null)}
+                          style={{
+                            flex: 1, padding: '8px 0', borderRadius: 50,
+                            background: 'transparent', border: '1px solid #3A3F46',
+                            color: '#6B7280', fontSize: 12, fontWeight: 600,
+                            cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                          }}
+                        >Cancel</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmId(course.id)}
+                        style={{
+                          padding: '8px 0', borderRadius: 50,
+                          background: 'transparent', border: '1px solid #2A2F35',
+                          color: '#3A3F46', fontSize: 12, fontWeight: 500,
+                          cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => {
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(220,38,38,0.4)';
+                          (e.currentTarget as HTMLButtonElement).style.color = '#F87171';
+                        }}
+                        onMouseLeave={e => {
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = '#2A2F35';
+                          (e.currentTarget as HTMLButtonElement).style.color = '#3A3F46';
+                        }}
+                      >Unenroll</button>
+                    )}
                   </div>
                 );
               })}
