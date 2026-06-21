@@ -230,24 +230,42 @@ export default function AdminPage() {
   }, [editingLesson?.id, editingLesson?.type]);
 
   const saveQuestion = async () => {
-    if (!editingQuestion || !editingLesson?.id) return;
-    if (!editingQuestion.question_text || !editingQuestion.correct_answer) { showToast('Fill in question text and correct answer.'); return; }
+    if (!editingQuestion || !editingLesson?.id) {
+      showToast('Save the lesson first before adding questions.');
+      return;
+    }
+    if (!editingQuestion.question_text.trim()) { showToast('Question text is required.'); return; }
+    if (!editingQuestion.correct_answer.trim()) { showToast('Correct answer is required.'); return; }
+    const filledOptions = editingQuestion.options.filter(o => o.trim());
+    if (filledOptions.length < 2) { showToast('Add at least 2 options.'); return; }
+    if (!filledOptions.includes(editingQuestion.correct_answer.trim())) {
+      showToast('Correct answer must exactly match one of the options.');
+      return;
+    }
     setSavingQuestion(true);
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
     const payload = {
       lesson_id: editingLesson.id,
       order_index: editingQuestion.order_index,
-      question_text: editingQuestion.question_text,
+      question_text: editingQuestion.question_text.trim(),
       question_type: editingQuestion.question_type,
-      options: editingQuestion.options,
-      correct_answer: editingQuestion.correct_answer,
-      explanation: editingQuestion.explanation,
+      options: filledOptions,
+      correct_answer: editingQuestion.correct_answer.trim(),
+      explanation: editingQuestion.explanation?.trim() || null,
     };
+    let saveError: any = null;
     if (editingQuestion.id) {
-      await supabase.from('quiz_questions').update(payload).eq('id', editingQuestion.id);
+      const { error } = await supabase.from('quiz_questions').update(payload).eq('id', editingQuestion.id);
+      saveError = error;
     } else {
-      await supabase.from('quiz_questions').insert(payload);
+      const { error } = await supabase.from('quiz_questions').insert(payload);
+      saveError = error;
+    }
+    if (saveError) {
+      showToast(`Error: ${saveError.message}`);
+      setSavingQuestion(false);
+      return;
     }
     const { data } = await supabase.from('quiz_questions').select('*').eq('lesson_id', editingLesson.id).order('order_index');
     setQuizQuestions((data || []).map((q: any) => ({ ...q, options: Array.isArray(q.options) ? q.options : JSON.parse(q.options || '[]') })));
@@ -888,8 +906,13 @@ export default function AdminPage() {
                                       <button onClick={() => setEditingQuestion(q => q ? ({ ...q, options: [...q.options, ''] }) : q)} style={{ fontSize: 12, color: '#D59C10', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 4 }}>+ Add option</button>
                                     </div>
                                     <div style={{ marginBottom: 12 }}>
-                                      <label style={labelStyle}>Correct Answer (must match one option exactly)</label>
-                                      <input style={inputStyle} value={editingQuestion.correct_answer} onChange={e => setEditingQuestion(q => q ? ({ ...q, correct_answer: e.target.value }) : q)} placeholder="Exact text of the correct option" />
+                                      <label style={labelStyle}>Correct Answer</label>
+                                      <select style={{ ...inputStyle, cursor: 'pointer' }} value={editingQuestion.correct_answer} onChange={e => setEditingQuestion(q => q ? ({ ...q, correct_answer: e.target.value }) : q)}>
+                                        <option value="">Select the correct option...</option>
+                                        {editingQuestion.options.filter(o => o.trim()).map((opt, oi) => (
+                                          <option key={oi} value={opt}>{opt}</option>
+                                        ))}
+                                      </select>
                                     </div>
                                     <div style={{ marginBottom: 16 }}>
                                       <label style={labelStyle}>Explanation (shown after submit, optional)</label>
