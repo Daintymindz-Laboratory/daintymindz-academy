@@ -132,16 +132,17 @@ export default function Home() {
           }}>Academy</span>
         </div>
 
-        {/* Nav links */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+        {/* Auth buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <a
             href="https://daintymindz.com"
             target="_blank"
             rel="noopener noreferrer"
+            className="dm-hide-mobile"
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
               color: '#6B7280', fontSize: 14, fontWeight: 500,
-              textDecoration: 'none', transition: 'color 0.15s',
+              textDecoration: 'none', transition: 'color 0.15s', marginRight: 8,
             }}
             onMouseEnter={e => (e.currentTarget.style.color = '#D59C10')}
             onMouseLeave={e => (e.currentTarget.style.color = '#6B7280')}
@@ -149,10 +150,6 @@ export default function Home() {
             Main site
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </a>
-        </div>
-
-        {/* Auth buttons */}
-        <div className="dm-auth-buttons" style={{ display: 'flex', gap: 10 }}>
           <button style={{
             background: 'transparent', border: '1px solid #3A3F46',
             color: '#F5F5F5', padding: '9px 22px', fontSize: 14, fontWeight: 500,

@@ -37,7 +37,7 @@ export default function SignIn() {
       {/* NAV */}
       <nav style={{
         borderBottom: '1px solid #2A2F35',
-        padding: '0 2.5rem', height: 68,
+        padding: '0 1.5rem', height: 68,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
@@ -48,7 +48,7 @@ export default function SignIn() {
           }}>Academy</span>
         </a>
 
-        <a href="/signup" style={{ color: '#6B7280', fontSize: 14, textDecoration: 'none', fontWeight: 500 }}>No account? Sign up</a>
+        <a href="/signup" style={{ color: '#6B7280', fontSize: 14, textDecoration: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}>Sign up</a>
 
       </nav>
 

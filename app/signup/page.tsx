@@ -53,7 +53,7 @@ const handleSubmit = async (e: React.FormEvent) => {
       {/* NAV */}
       <nav style={{
         borderBottom: '1px solid #2A2F35',
-        padding: '0 2.5rem', height: 68,
+        padding: '0 1.5rem', height: 68,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         flexShrink: 0,
       }}>
@@ -65,7 +65,7 @@ const handleSubmit = async (e: React.FormEvent) => {
           }}>Academy</span>
         </a>
         
-          <a href="/signin" style={{ color: '#6B7280', fontSize: 14, textDecoration: 'none', fontWeight: 500 }}>Already have an account? Sign in</a>
+          <a href="/signin" style={{ color: '#6B7280', fontSize: 14, textDecoration: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}>Sign in</a>
       </nav>
 
       {/* BODY */}
