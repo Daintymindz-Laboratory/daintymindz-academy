@@ -55,29 +55,108 @@ export default function CertificateViewPage() {
   }, [certId]);
 
   const handlePrint = () => {
-    const certEl = document.getElementById('certificate');
-    if (!certEl) return;
+    if (!cert) return;
     const origin = window.location.origin;
-    const certHtml = certEl.outerHTML.replace(/src="\/logo\.png"/g, `src="${origin}/logo.png"`);
-    const win = window.open('', '_blank', 'width=1200,height=850');
+    const trackColor = TRACKS[cert.courses?.track]?.color || '#D59C10';
+    const win = window.open('', '_blank', 'width=1400,height=1000');
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html><head>
-<title>Certificate</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<title>Certificate - ${cert.courses?.title || ''}</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 @page { size: A4 landscape; margin: 0; }
-* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
-html, body { margin: 0; padding: 0; width: 297mm; height: 210mm; overflow: hidden; background: white; }
-#certificate {
-  width: 297mm !important;
-  height: 210mm !important;
-  max-width: none !important;
-  padding: 28px 56px !important;
-  box-shadow: none !important;
-  position: relative !important;
+* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 297mm; height: 210mm; overflow: hidden; background: white; font-family: 'DM Sans', sans-serif; }
+.cert {
+  width: 297mm; height: 210mm;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: space-between;
+  padding: 22px 52px 26px;
+  position: relative;
 }
+.border1 { position: absolute; inset: 8px; border: 3px solid #33383D; pointer-events: none; }
+.border2 { position: absolute; inset: 14px; border: 1px solid ${trackColor}; pointer-events: none; }
+.border3 { position: absolute; inset: 18px; border: 0.5px solid ${trackColor}40; pointer-events: none; }
+.top { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.logo { height: 44px; object-fit: contain; }
+.academy { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; color: #6B7280; }
+.divider { display: flex; align-items: center; gap: 10px; width: 100%; }
+.divider-line { flex: 1; height: 1px; background: ${trackColor}; opacity: 0.4; }
+.diamond { width: 5px; height: 5px; background: ${trackColor}; transform: rotate(45deg); }
+.middle { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.cert-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; color: #6B7280; }
+.certify-text { font-size: 13px; color: #6B7280; font-style: italic; }
+.name { font-size: 38px; font-weight: 700; color: #33383D; letter-spacing: -0.02em; line-height: 1.1; }
+.name-underline { width: 180px; height: 2px; background: ${trackColor}; }
+.completed-text { font-size: 13px; color: #6B7280; }
+.course-title { font-size: 22px; font-weight: 700; color: #33383D; letter-spacing: -0.01em; }
+.badges { display: flex; gap: 10px; justify-content: center; }
+.badge { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; border-radius: 20px; padding: 4px 14px; }
+.badge-track { background: ${trackColor}12; border: 1px solid ${trackColor}40; color: #A37808; }
+.badge-level { background: rgba(51,56,61,0.07); border: 1px solid rgba(51,56,61,0.18); color: #6B7280; }
+.bottom { display: grid; grid-template-columns: 1fr 1fr 1fr; width: 100%; align-items: end; gap: 16px; }
+.sig-name { font-family: Georgia, serif; font-style: italic; font-size: 22px; color: #33383D; margin-bottom: 4px; }
+.sig-line { height: 1px; background: #33383D; margin-bottom: 5px; }
+.sig-label { font-size: 10px; color: #6B7280; }
+.sig-sub { font-size: 9px; color: #9CA3AF; line-height: 1.5; }
+.seal-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.seal { width: 72px; height: 72px; object-fit: contain; }
+.seal-fallback { width: 68px; height: 68px; border-radius: 50%; border: 2px solid ${trackColor}; display: flex; flex-direction: column; align-items: center; justify-content: center; background: ${trackColor}06; }
+.cert-id { font-family: 'JetBrains Mono', monospace; font-size: 8px; color: #9CA3AF; letter-spacing: 0.06em; }
+.date-col { text-align: center; }
+.date-val { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; color: #33383D; margin-bottom: 5px; }
 </style>
-</head><body>${certHtml}<script>setTimeout(function(){window.print();},1200);<\/script></body></html>`);
+</head><body>
+<div class="cert">
+  <div class="border1"></div>
+  <div class="border2"></div>
+  <div class="border3"></div>
+
+  <div class="top">
+    <img src="${origin}/logo.png" class="logo" alt="Daintymindz" />
+    <div class="academy">Academy</div>
+  </div>
+
+  <div class="divider"><div class="divider-line"></div><div class="diamond"></div><div class="divider-line"></div></div>
+
+  <div class="middle">
+    <div class="cert-label">Certificate of Completion</div>
+    <div class="certify-text">This is to certify that</div>
+    <div class="name">${cert.profiles?.full_name || ''}</div>
+    <div class="name-underline"></div>
+    <div class="completed-text">has successfully completed</div>
+    <div class="course-title">${cert.courses?.title || ''}</div>
+    <div class="badges">
+      <span class="badge badge-track">${cert.courses?.track || ''} Track</span>
+      <span class="badge badge-level">${cert.courses?.level || ''}</span>
+    </div>
+  </div>
+
+  <div class="divider"><div class="divider-line"></div><div class="diamond" style="width:4px;height:4px"></div><div class="divider-line"></div></div>
+
+  <div class="bottom">
+    <div style="text-align:center">
+      <div class="sig-name">Judith Vowels</div>
+      <div class="sig-line"></div>
+      <div class="sig-label">Dr. Judith Vowels</div>
+      <div class="sig-sub">Research Director<br>Daintymindz Academy</div>
+    </div>
+    <div class="seal-col">
+      ${sealUrl
+        ? `<img src="${sealUrl}" class="seal" alt="Seal" />`
+        : `<div class="seal-fallback"><span style="font-size:20px;font-weight:700;color:${trackColor}">D</span><span style="font-size:7px;color:#A37808;letter-spacing:0.1em">VERIFIED</span></div>`
+      }
+      <div class="cert-id">${cert.cert_id}</div>
+    </div>
+    <div class="date-col">
+      <div class="date-val">${issueDate}</div>
+      <div class="sig-line"></div>
+      <div class="sig-label">Date of Completion</div>
+    </div>
+  </div>
+</div>
+<script>setTimeout(function(){window.print();},1400);<\/script>
+</body></html>`);
     win.document.close();
   };
 
