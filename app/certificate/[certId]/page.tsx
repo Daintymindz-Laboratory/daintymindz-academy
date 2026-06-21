@@ -67,7 +67,15 @@ export default function CertificateViewPage() {
 <style>
 @page { size: A4 landscape; margin: 0; }
 * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
-html, body { margin: 0; padding: 0; width: 297mm; height: 210mm; overflow: hidden; background: white; display: flex; align-items: center; justify-content: center; }
+html, body { margin: 0; padding: 0; width: 297mm; height: 210mm; overflow: hidden; background: white; }
+#certificate {
+  width: 297mm !important;
+  height: 210mm !important;
+  max-width: none !important;
+  padding: 28px 56px !important;
+  box-shadow: none !important;
+  position: relative !important;
+}
 </style>
 </head><body>${certHtml}<script>setTimeout(function(){window.print();},1200);<\/script></body></html>`);
     win.document.close();
