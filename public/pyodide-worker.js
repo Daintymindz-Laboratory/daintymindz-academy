@@ -1,4 +1,5 @@
-/* Pyodide Web Worker — runs Python in an isolated thread with timeout support */
+/* Pyodide Web Worker: runs Python in an isolated thread with timeout support.
+   Each message can include a runId so multiple callers can match responses. */
 let pyodide = null;
 let outputBuffer = '';
 
@@ -12,11 +13,11 @@ async function init() {
 }
 
 self.onmessage = async (e) => {
-  const { type, code } = e.data;
+  const { type, code, runId } = e.data;
 
   if (type === 'run') {
     if (!pyodide) {
-      self.postMessage({ type: 'error', error: 'Pyodide not loaded yet.' });
+      self.postMessage({ type: 'error', error: 'Pyodide not loaded yet.', runId });
       return;
     }
     try {
@@ -25,17 +26,14 @@ self.onmessage = async (e) => {
         outputBuffer += args.join(' ') + '\n';
       });
 
-      // Load any packages imported in the code
       try {
         await pyodide.loadPackagesFromImports(code);
-      } catch (_) {
-        // Ignore package load failures for unknown imports
-      }
+      } catch (_) {}
 
       await pyodide.runPythonAsync(code);
-      self.postMessage({ type: 'output', output: outputBuffer || '(no output)' });
+      self.postMessage({ type: 'output', output: outputBuffer || '(no output)', runId });
     } catch (err) {
-      self.postMessage({ type: 'error', error: String(err.message || err) });
+      self.postMessage({ type: 'error', error: String(err.message || err), runId });
     }
   }
 };

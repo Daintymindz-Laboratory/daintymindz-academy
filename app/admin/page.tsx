@@ -67,6 +67,32 @@ export default function AdminPage() {
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [savingLesson, setSavingLesson] = useState(false);
 
+  type QuizQuestion = {
+    id?: number;
+    lesson_id: number;
+    order_index: number;
+    question_text: string;
+    question_type: string;
+    options: string[];
+    correct_answer: string;
+    explanation: string;
+  };
+  type TestCase = {
+    id?: number;
+    lesson_id: number;
+    order_index: number;
+    description: string;
+    test_code: string;
+    expected_output: string;
+  };
+
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
+  const [editingQuestion, setEditingQuestion] = useState<QuizQuestion | null>(null);
+  const [savingQuestion, setSavingQuestion] = useState(false);
+  const [testCases, setTestCases] = useState<TestCase[]>([]);
+  const [editingTestCase, setEditingTestCase] = useState<TestCase | null>(null);
+  const [savingTestCase, setSavingTestCase] = useState(false);
+
   useEffect(() => {
     const init = async () => {
       const { createClient } = await import('@/lib/supabase');
@@ -96,6 +122,94 @@ export default function AdminPage() {
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(''), 3000);
+  };
+
+  useEffect(() => {
+    if (!editingLesson?.id) { setQuizQuestions([]); setTestCases([]); return; }
+    const load = async () => {
+      const { createClient } = await import('@/lib/supabase');
+      const supabase = createClient();
+      if (editingLesson.type === 'quiz') {
+        const { data } = await supabase.from('quiz_questions').select('*').eq('lesson_id', editingLesson.id).order('order_index');
+        setQuizQuestions((data || []).map((q: any) => ({ ...q, options: Array.isArray(q.options) ? q.options : JSON.parse(q.options || '[]') })));
+      } else if (editingLesson.type === 'mini_project') {
+        const { data } = await supabase.from('mini_project_test_cases').select('*').eq('lesson_id', editingLesson.id).order('order_index');
+        setTestCases(data || []);
+      }
+    };
+    load();
+  }, [editingLesson?.id, editingLesson?.type]);
+
+  const saveQuestion = async () => {
+    if (!editingQuestion || !editingLesson?.id) return;
+    if (!editingQuestion.question_text || !editingQuestion.correct_answer) { showToast('Fill in question text and correct answer.'); return; }
+    setSavingQuestion(true);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const payload = {
+      lesson_id: editingLesson.id,
+      order_index: editingQuestion.order_index,
+      question_text: editingQuestion.question_text,
+      question_type: editingQuestion.question_type,
+      options: editingQuestion.options,
+      correct_answer: editingQuestion.correct_answer,
+      explanation: editingQuestion.explanation,
+    };
+    if (editingQuestion.id) {
+      await supabase.from('quiz_questions').update(payload).eq('id', editingQuestion.id);
+    } else {
+      await supabase.from('quiz_questions').insert(payload);
+    }
+    const { data } = await supabase.from('quiz_questions').select('*').eq('lesson_id', editingLesson.id).order('order_index');
+    setQuizQuestions((data || []).map((q: any) => ({ ...q, options: Array.isArray(q.options) ? q.options : JSON.parse(q.options || '[]') })));
+    setEditingQuestion(null);
+    setSavingQuestion(false);
+    showToast('Question saved.');
+  };
+
+  const deleteQuestion = async (id: number) => {
+    if (!editingLesson?.id) return;
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    await supabase.from('quiz_questions').delete().eq('id', id);
+    const { data } = await supabase.from('quiz_questions').select('*').eq('lesson_id', editingLesson.id).order('order_index');
+    setQuizQuestions((data || []).map((q: any) => ({ ...q, options: Array.isArray(q.options) ? q.options : JSON.parse(q.options || '[]') })));
+    showToast('Question deleted.');
+  };
+
+  const saveTestCase = async () => {
+    if (!editingTestCase || !editingLesson?.id) return;
+    if (!editingTestCase.description || !editingTestCase.test_code || !editingTestCase.expected_output) { showToast('Fill in all test case fields.'); return; }
+    setSavingTestCase(true);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const payload = {
+      lesson_id: editingLesson.id,
+      order_index: editingTestCase.order_index,
+      description: editingTestCase.description,
+      test_code: editingTestCase.test_code,
+      expected_output: editingTestCase.expected_output,
+    };
+    if (editingTestCase.id) {
+      await supabase.from('mini_project_test_cases').update(payload).eq('id', editingTestCase.id);
+    } else {
+      await supabase.from('mini_project_test_cases').insert(payload);
+    }
+    const { data } = await supabase.from('mini_project_test_cases').select('*').eq('lesson_id', editingLesson.id).order('order_index');
+    setTestCases(data || []);
+    setEditingTestCase(null);
+    setSavingTestCase(false);
+    showToast('Test case saved.');
+  };
+
+  const deleteTestCase = async (id: number) => {
+    if (!editingLesson?.id) return;
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    await supabase.from('mini_project_test_cases').delete().eq('id', id);
+    const { data } = await supabase.from('mini_project_test_cases').select('*').eq('lesson_id', editingLesson.id).order('order_index');
+    setTestCases(data || []);
+    showToast('Test case deleted.');
   };
 
   const saveCourse = async () => {
@@ -493,9 +607,11 @@ export default function AdminPage() {
                             <label style={labelStyle}>Lesson Type</label>
                             <select style={{ ...inputStyle, cursor: 'pointer' }} value={editingLesson.type}
                               onChange={e => setEditingLesson(p => p ? ({ ...p, type: e.target.value }) : p)}>
-                              <option value="lesson">Lesson (theory + code)</option>
+                              <option value="lesson">Lesson (article + code)</option>
                               <option value="project">Project (Monaco editor)</option>
-                              <option value="assessment">Assessment (quiz)</option>
+                              <option value="quiz">Quiz (auto-graded, 70% pass)</option>
+                              <option value="mini_project">Mini Project (code + test cases)</option>
+                              <option value="assessment">Assessment (markdown)</option>
                             </select>
                           </div>
                           <div>
@@ -628,6 +744,141 @@ export default function AdminPage() {
                           </div>
                         )}
 
+                        {/* QUIZ type fields */}
+                        {editingLesson.type === 'quiz' && (
+                          <div>
+                            <div data-color-mode="dark" style={{ marginBottom: 20 }}>
+                              <label style={{ ...labelStyle, marginBottom: 10 }}>Quiz Introduction (optional, Markdown)</label>
+                              <MDEditor value={editingLesson.content} onChange={val => setEditingLesson(p => p ? ({ ...p, content: val || '' }) : p)} height={180} preview="live" />
+                            </div>
+                            {!editingLesson.id ? (
+                              <div style={{ padding: '14px 18px', background: 'rgba(213,156,16,0.06)', border: '1px solid rgba(213,156,16,0.2)', borderRadius: 12, fontSize: 13, color: '#D59C10' }}>
+                                Save the lesson first to add questions.
+                              </div>
+                            ) : (
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                                  <label style={labelStyle}>Quiz Questions ({quizQuestions.length})</label>
+                                  <button onClick={() => setEditingQuestion({ lesson_id: editingLesson.id!, order_index: quizQuestions.length + 1, question_text: '', question_type: 'multiple_choice', options: ['', '', '', ''], correct_answer: '', explanation: '' })} style={{ background: '#D59C10', border: 'none', borderRadius: 50, padding: '6px 18px', fontSize: 13, fontWeight: 700, color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>+ Add Question</button>
+                                </div>
+                                {editingQuestion && (
+                                  <div style={{ background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 14, padding: '1.25rem', marginBottom: 16 }}>
+                                    <div style={{ marginBottom: 12 }}>
+                                      <label style={labelStyle}>Question Type</label>
+                                      <select style={{ ...inputStyle, cursor: 'pointer' }} value={editingQuestion.question_type} onChange={e => setEditingQuestion(q => q ? ({ ...q, question_type: e.target.value }) : q)}>
+                                        <option value="multiple_choice">Multiple Choice</option>
+                                        <option value="code_output">Code Output (shown as code block)</option>
+                                      </select>
+                                    </div>
+                                    <div style={{ marginBottom: 12 }}>
+                                      <label style={labelStyle}>Question Text {editingQuestion.question_type === 'code_output' ? '(Python code snippet)' : ''}</label>
+                                      <textarea value={editingQuestion.question_text} onChange={e => setEditingQuestion(q => q ? ({ ...q, question_text: e.target.value }) : q)} rows={3} style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, fontFamily: editingQuestion.question_type === 'code_output' ? 'JetBrains Mono, monospace' : 'DM Sans, sans-serif', fontSize: 13 }} placeholder="What is the output of the following code?" />
+                                    </div>
+                                    <div style={{ marginBottom: 12 }}>
+                                      <label style={labelStyle}>Options (one per line)</label>
+                                      {editingQuestion.options.map((opt, oi) => (
+                                        <input key={oi} style={{ ...inputStyle, marginBottom: 6 }} value={opt} onChange={e => setEditingQuestion(q => { if (!q) return q; const opts = [...q.options]; opts[oi] = e.target.value; return { ...q, options: opts }; })} placeholder={`Option ${oi + 1}`} />
+                                      ))}
+                                      <button onClick={() => setEditingQuestion(q => q ? ({ ...q, options: [...q.options, ''] }) : q)} style={{ fontSize: 12, color: '#D59C10', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginTop: 4 }}>+ Add option</button>
+                                    </div>
+                                    <div style={{ marginBottom: 12 }}>
+                                      <label style={labelStyle}>Correct Answer (must match one option exactly)</label>
+                                      <input style={inputStyle} value={editingQuestion.correct_answer} onChange={e => setEditingQuestion(q => q ? ({ ...q, correct_answer: e.target.value }) : q)} placeholder="Exact text of the correct option" />
+                                    </div>
+                                    <div style={{ marginBottom: 16 }}>
+                                      <label style={labelStyle}>Explanation (shown after submit, optional)</label>
+                                      <textarea value={editingQuestion.explanation} onChange={e => setEditingQuestion(q => q ? ({ ...q, explanation: e.target.value }) : q)} rows={2} style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, fontSize: 13 }} />
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 10 }}>
+                                      <button onClick={saveQuestion} disabled={savingQuestion} style={{ background: '#D59C10', border: 'none', borderRadius: 50, padding: '8px 22px', fontSize: 13, fontWeight: 700, color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>{savingQuestion ? 'Saving...' : editingQuestion.id ? 'Update Question' : 'Save Question'}</button>
+                                      <button onClick={() => setEditingQuestion(null)} style={{ background: 'transparent', border: '1px solid #3A3F46', borderRadius: 50, padding: '8px 22px', fontSize: 13, color: '#6B7280', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>Cancel</button>
+                                    </div>
+                                  </div>
+                                )}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                  {quizQuestions.map((q, qi) => (
+                                    <div key={q.id} style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                                      <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#4E8FD4', background: 'rgba(78,143,212,0.1)', padding: '2px 8px', borderRadius: 10, flexShrink: 0, marginTop: 2 }}>Q{qi + 1}</span>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: 14, color: '#F5F5F5', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.question_text}</div>
+                                        <div style={{ fontSize: 12, color: '#6B7280' }}>{q.options.length} options, correct: <span style={{ color: '#4CAF7D' }}>{q.correct_answer}</span></div>
+                                      </div>
+                                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                                        <button onClick={() => setEditingQuestion(q)} style={{ background: 'transparent', border: '1px solid #3A3F46', borderRadius: 20, padding: '4px 12px', fontSize: 12, color: '#F5F5F5', cursor: 'pointer' }}>Edit</button>
+                                        <button onClick={() => deleteQuestion(q.id!)} style={{ background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 20, padding: '4px 12px', fontSize: 12, color: '#F87171', cursor: 'pointer' }}>Delete</button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* MINI_PROJECT type fields */}
+                        {editingLesson.type === 'mini_project' && (
+                          <div>
+                            <div data-color-mode="dark" style={{ marginBottom: 16 }}>
+                              <label style={{ ...labelStyle, marginBottom: 10 }}>Instructions (shown to students above the editor)</label>
+                              <MDEditor value={editingLesson.instructions} onChange={val => setEditingLesson(p => p ? ({ ...p, instructions: val || '' }) : p)} height={200} preview="live" />
+                            </div>
+                            <div style={{ marginBottom: 20 }}>
+                              <label style={labelStyle}>Starter Code (pre-filled in Monaco editor)</label>
+                              <textarea value={editingLesson.starter_code} onChange={e => setEditingLesson(p => p ? ({ ...p, starter_code: e.target.value }) : p)} rows={8} style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, lineHeight: 1.7, fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }} placeholder="# Starter code for students..." />
+                            </div>
+                            {!editingLesson.id ? (
+                              <div style={{ padding: '14px 18px', background: 'rgba(213,156,16,0.06)', border: '1px solid rgba(213,156,16,0.2)', borderRadius: 12, fontSize: 13, color: '#D59C10' }}>
+                                Save the lesson first to add test cases.
+                              </div>
+                            ) : (
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                                  <label style={labelStyle}>Test Cases ({testCases.length})</label>
+                                  <button onClick={() => setEditingTestCase({ lesson_id: editingLesson.id!, order_index: testCases.length + 1, description: '', test_code: '', expected_output: '' })} style={{ background: '#D59C10', border: 'none', borderRadius: 50, padding: '6px 18px', fontSize: 13, fontWeight: 700, color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>+ Add Test Case</button>
+                                </div>
+                                <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 12, lineHeight: 1.6 }}>
+                                  Each test case appends its code to the student solution, then checks that the printed output matches expected output exactly.
+                                </div>
+                                {editingTestCase && (
+                                  <div style={{ background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 14, padding: '1.25rem', marginBottom: 16 }}>
+                                    <div style={{ marginBottom: 12 }}>
+                                      <label style={labelStyle}>Description (shown to students)</label>
+                                      <input style={inputStyle} value={editingTestCase.description} onChange={e => setEditingTestCase(t => t ? ({ ...t, description: e.target.value }) : t)} placeholder="e.g. add(2, 3) should return 5" />
+                                    </div>
+                                    <div style={{ marginBottom: 12 }}>
+                                      <label style={labelStyle}>Test Code (appended to student code, should print expected output)</label>
+                                      <textarea value={editingTestCase.test_code} onChange={e => setEditingTestCase(t => t ? ({ ...t, test_code: e.target.value }) : t)} rows={5} style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, lineHeight: 1.7, fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }} placeholder={'print(add(2, 3))'} />
+                                    </div>
+                                    <div style={{ marginBottom: 16 }}>
+                                      <label style={labelStyle}>Expected Output (exact match after trim)</label>
+                                      <input style={{ ...inputStyle, fontFamily: 'JetBrains Mono, monospace' }} value={editingTestCase.expected_output} onChange={e => setEditingTestCase(t => t ? ({ ...t, expected_output: e.target.value }) : t)} placeholder="5" />
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 10 }}>
+                                      <button onClick={saveTestCase} disabled={savingTestCase} style={{ background: '#D59C10', border: 'none', borderRadius: 50, padding: '8px 22px', fontSize: 13, fontWeight: 700, color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>{savingTestCase ? 'Saving...' : editingTestCase.id ? 'Update Test Case' : 'Save Test Case'}</button>
+                                      <button onClick={() => setEditingTestCase(null)} style={{ background: 'transparent', border: '1px solid #3A3F46', borderRadius: 50, padding: '8px 22px', fontSize: 13, color: '#6B7280', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>Cancel</button>
+                                    </div>
+                                  </div>
+                                )}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                  {testCases.map((tc, ti) => (
+                                    <div key={tc.id} style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                                      <span style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#E86F4E', background: 'rgba(232,111,78,0.1)', padding: '2px 8px', borderRadius: 10, flexShrink: 0, marginTop: 2 }}>TC{ti + 1}</span>
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: 14, color: '#F5F5F5', marginBottom: 4 }}>{tc.description}</div>
+                                        <div style={{ fontSize: 12, color: '#6B7280' }}>Expected: <span style={{ fontFamily: 'JetBrains Mono, monospace', color: '#4CAF7D' }}>{tc.expected_output}</span></div>
+                                      </div>
+                                      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                                        <button onClick={() => setEditingTestCase(tc)} style={{ background: 'transparent', border: '1px solid #3A3F46', borderRadius: 20, padding: '4px 12px', fontSize: 12, color: '#F5F5F5', cursor: 'pointer' }}>Edit</button>
+                                        <button onClick={() => deleteTestCase(tc.id!)} style={{ background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 20, padding: '4px 12px', fontSize: 12, color: '#F87171', cursor: 'pointer' }}>Delete</button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Publish toggle */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           <div onClick={() => setEditingLesson(p => p ? ({ ...p, is_published: !p.is_published }) : p)}
@@ -673,23 +924,23 @@ export default function AdminPage() {
                         borderRadius: 16, padding: '16px 20px',
                         display: 'flex', alignItems: 'center', gap: 16,
                       }}>
-                        <div style={{
-                          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                          background: lesson.type === 'project' ? 'rgba(155,111,212,0.15)' : lesson.type === 'assessment' ? 'rgba(78,143,212,0.15)' : 'rgba(213,156,16,0.15)',
-                          border: `1px solid ${lesson.type === 'project' ? 'rgba(155,111,212,0.3)' : lesson.type === 'assessment' ? 'rgba(78,143,212,0.3)' : 'rgba(213,156,16,0.3)'}`,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
-                          color: lesson.type === 'project' ? '#9B6FD4' : lesson.type === 'assessment' ? '#4E8FD4' : '#D59C10',
-                        }}>{idx + 1}</div>
+                        {(() => {
+                          const tc: Record<string, string> = { project: '#9B6FD4', quiz: '#4E8FD4', mini_project: '#E86F4E', assessment: '#4E8FD4', lesson: '#D59C10' };
+                          const c = tc[lesson.type] || '#D59C10';
+                          return (
+                            <div style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${c}15`, border: `1px solid ${c}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: c }}>{idx + 1}</div>
+                          );
+                        })()}
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 15, fontWeight: 600, color: '#F5F5F5', marginBottom: 3 }}>{lesson.title}</div>
                           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                            <span style={{
-                              fontSize: 10, padding: '2px 8px', borderRadius: 20,
-                              fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
-                              background: lesson.type === 'project' ? 'rgba(155,111,212,0.1)' : lesson.type === 'assessment' ? 'rgba(78,143,212,0.1)' : 'rgba(213,156,16,0.1)',
-                              color: lesson.type === 'project' ? '#9B6FD4' : lesson.type === 'assessment' ? '#4E8FD4' : '#D59C10',
-                            }}>{lesson.type.toUpperCase()}</span>
+                            {(() => {
+                              const tc: Record<string, string> = { project: '#9B6FD4', quiz: '#4E8FD4', mini_project: '#E86F4E', assessment: '#4E8FD4', lesson: '#D59C10' };
+                              const c = tc[lesson.type] || '#D59C10';
+                              return (
+                                <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', background: `${c}15`, color: c }}>{lesson.type.replace('_', ' ').toUpperCase()}</span>
+                              );
+                            })()}
                             <span style={{
                               fontSize: 10, padding: '2px 8px', borderRadius: 20,
                               fontFamily: 'JetBrains Mono, monospace',

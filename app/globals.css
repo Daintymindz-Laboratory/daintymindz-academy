@@ -110,12 +110,15 @@ code, pre { font-family: 'JetBrains Mono', monospace; }
   .dm-lesson-sidebar.open { transform: translateX(0); }
 }
 
-/* Lesson split pane */
+/* Lesson split pane (project type) */
 .lesson-split { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; flex: 1; }
 @media (max-width: 768px) {
   .lesson-split { grid-template-columns: 1fr !important; overflow-y: auto; }
-  .lesson-split > div:last-child { display: none; } /* hide code pane, accessible via tab */
+  .lesson-split > div:last-child { display: none; }
 }
+
+/* Single-column lesson main (lesson, quiz, mini_project types) */
+.dm-lesson-main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
 
 /* Mobile overlay backdrop */
 .dm-sidebar-backdrop {
