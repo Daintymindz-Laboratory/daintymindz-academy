@@ -152,7 +152,7 @@ export default function Home() {
         </div>
 
         {/* Auth buttons */}
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="dm-auth-buttons" style={{ display: 'flex', gap: 10 }}>
           <button style={{
             background: 'transparent', border: '1px solid #3A3F46',
             color: '#F5F5F5', padding: '9px 22px', fontSize: 14, fontWeight: 500,
@@ -168,7 +168,7 @@ export default function Home() {
       </nav>
 
       {/* HERO */}
-      <section style={{
+      <section className="dm-hero" style={{
         position: 'relative', zIndex: 1,
         minHeight: '100vh',
         display: 'grid', gridTemplateColumns: '1fr 1fr',
@@ -176,7 +176,7 @@ export default function Home() {
       }}>
 
         {/* LEFT */}
-        <div style={{
+        <div className="dm-hero-left" style={{
           padding: '7rem 4rem 4rem',
           borderRight: '1px solid #2A2F35',
           display: 'flex', flexDirection: 'column', justifyContent: 'center',
@@ -243,7 +243,7 @@ export default function Home() {
         </div>
 
         {/* RIGHT */}
-        <div style={{
+        <div className="dm-hide-mobile" style={{
           padding: '7rem 4rem 4rem',
           display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 14,
         }}>
