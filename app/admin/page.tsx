@@ -423,7 +423,7 @@ export default function AdminPage() {
               </div>
 
               {showForm && (
-                <div style={{
+                <div id="course-form" style={{
                   background: '#22262B', border: '1px solid #2A2F35',
                   borderRadius: 20, padding: '1.75rem 2rem', marginBottom: '2rem',
                 }}>
@@ -516,7 +516,11 @@ export default function AdminPage() {
                           fontSize: 12, color: '#D59C10', cursor: 'pointer',
                           fontFamily: 'DM Sans, sans-serif',
                         }}>Lessons</button>
-                        <button onClick={() => { setEditingCourse(course); setShowForm(true); }} style={{
+                        <button onClick={() => {
+                          setEditingCourse(course);
+                          setShowForm(true);
+                          setTimeout(() => document.getElementById('course-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+                        }} style={{
                           background: 'transparent', border: '1px solid #3A3F46',
                           borderRadius: 20, padding: '6px 16px',
                           fontSize: 12, color: '#F5F5F5', cursor: 'pointer',

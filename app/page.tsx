@@ -1,9 +1,23 @@
 'use client';
 import Image from 'next/image';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [courseCounts, setCourseCounts] = useState<Record<string, number>>({ AI: 0, DS: 0, SE: 0, DO: 0, total: 0 });
+
+  useEffect(() => {
+    const loadCounts = async () => {
+      const { createClient } = await import('@/lib/supabase');
+      const supabase = createClient();
+      const { data } = await supabase.from('courses').select('track');
+      if (!data) return;
+      const counts: Record<string, number> = { AI: 0, DS: 0, SE: 0, DO: 0, total: data.length };
+      data.forEach((c: any) => { if (counts[c.track] !== undefined) counts[c.track]++; });
+      setCourseCounts(counts);
+    };
+    loadCounts();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -76,7 +90,6 @@ export default function Home() {
       code: 'AI',
       name: 'Artificial Intelligence',
       desc: 'Machine learning, deep learning, neural networks, model deployment',
-      count: 4,
       color: '#D59C10',
       glow: 'rgba(213,156,16,0.15)',
     },
@@ -84,7 +97,6 @@ export default function Home() {
       code: 'DS',
       name: 'Data Science & Analytics',
       desc: 'Python, statistics, pandas, SQL, dashboards and visualization',
-      count: 3,
       color: '#4E8FD4',
       glow: 'rgba(78,143,212,0.15)',
     },
@@ -92,7 +104,6 @@ export default function Home() {
       code: 'SE',
       name: 'Software Engineering',
       desc: 'Python programming, system design, APIs and developer tooling',
-      count: 3,
       color: '#4CAF7D',
       glow: 'rgba(76,175,125,0.15)',
     },
@@ -100,7 +111,6 @@ export default function Home() {
       code: 'DO',
       name: 'Data Operations',
       desc: 'Data collection, annotation, engineering pipelines and MLOps',
-      count: 3,
       color: '#9B6FD4',
       glow: 'rgba(155,111,212,0.15)',
     },
@@ -216,7 +226,7 @@ export default function Home() {
           {/* Stats */}
           <div style={{ display: 'flex', gap: 12 }}>
             {[
-              { val: '13', label: 'Courses' },
+              { val: courseCounts.total > 0 ? String(courseCounts.total) : '—', label: 'Courses' },
               { val: '4', label: 'Tracks' },
               { val: '100%', label: 'Project-based' },
             ].map(s => (
@@ -303,7 +313,7 @@ export default function Home() {
                 <div style={{
                   fontFamily: 'JetBrains Mono, monospace',
                   fontSize: 20, color: track.color, fontWeight: 500,
-                }}>{track.count}</div>
+                }}>{courseCounts[track.code] ?? 0}</div>
                 <div style={{
                   fontSize: 10, color: '#6B7280',
                   fontFamily: 'JetBrains Mono, monospace',
