@@ -134,7 +134,7 @@ export default function Home() {
 
         {/* Nav links */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
-          <
+          <a
             href="https://daintymindz.com"
             target="_blank"
             rel="noopener noreferrer"
@@ -142,7 +142,6 @@ export default function Home() {
               display: 'flex', alignItems: 'center', gap: 5,
               color: '#6B7280', fontSize: 14, fontWeight: 500,
               textDecoration: 'none', transition: 'color 0.15s',
-              borderLeft: '1px solid #3A3F46', paddingLeft: 28,
             }}
             onMouseEnter={e => (e.currentTarget.style.color = '#D59C10')}
             onMouseLeave={e => (e.currentTarget.style.color = '#6B7280')}
