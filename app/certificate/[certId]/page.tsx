@@ -71,40 +71,40 @@ html, body { width: 297mm; height: 210mm; overflow: hidden; background: white; f
   width: 297mm; height: 210mm;
   display: flex; flex-direction: column;
   align-items: center; justify-content: space-between;
-  padding: 22px 52px 26px;
+  padding: 20px 60px 24px;
   position: relative;
 }
 .border1 { position: absolute; inset: 8px; border: 3px solid #33383D; pointer-events: none; }
 .border2 { position: absolute; inset: 14px; border: 1px solid ${trackColor}; pointer-events: none; }
 .border3 { position: absolute; inset: 18px; border: 0.5px solid ${trackColor}40; pointer-events: none; }
-.top { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.logo { height: 44px; object-fit: contain; }
-.academy { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; color: #6B7280; }
-.divider { display: flex; align-items: center; gap: 10px; width: 100%; }
+.top { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.logo { height: 80px; object-fit: contain; }
+.academy { font-family: 'JetBrains Mono', monospace; font-size: 16px; letter-spacing: 0.3em; text-transform: uppercase; color: #6B7280; }
+.divider { display: flex; align-items: center; gap: 12px; width: 100%; }
 .divider-line { flex: 1; height: 1px; background: ${trackColor}; opacity: 0.4; }
-.diamond { width: 5px; height: 5px; background: ${trackColor}; transform: rotate(45deg); }
+.diamond { width: 8px; height: 8px; background: ${trackColor}; transform: rotate(45deg); }
 .middle { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
-.cert-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase; color: #6B7280; }
-.certify-text { font-size: 13px; color: #6B7280; font-style: italic; }
-.name { font-size: 38px; font-weight: 700; color: #33383D; letter-spacing: -0.02em; line-height: 1.1; }
-.name-underline { width: 180px; height: 2px; background: ${trackColor}; }
-.completed-text { font-size: 13px; color: #6B7280; }
-.course-title { font-size: 22px; font-weight: 700; color: #33383D; letter-spacing: -0.01em; }
-.badges { display: flex; gap: 10px; justify-content: center; }
-.badge { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; border-radius: 20px; padding: 4px 14px; }
+.cert-label { font-family: 'JetBrains Mono', monospace; font-size: 17px; letter-spacing: 0.26em; text-transform: uppercase; color: #6B7280; }
+.certify-text { font-size: 22px; color: #6B7280; font-style: italic; }
+.name { font-size: 58px; font-weight: 700; color: #33383D; letter-spacing: -0.02em; line-height: 1.1; }
+.name-underline { width: 260px; height: 3px; background: ${trackColor}; }
+.completed-text { font-size: 20px; color: #6B7280; }
+.course-title { font-size: 32px; font-weight: 700; color: #33383D; letter-spacing: -0.01em; }
+.badges { display: flex; gap: 12px; justify-content: center; }
+.badge { font-family: 'JetBrains Mono', monospace; font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; border-radius: 20px; padding: 6px 18px; }
 .badge-track { background: ${trackColor}12; border: 1px solid ${trackColor}40; color: #A37808; }
 .badge-level { background: rgba(51,56,61,0.07); border: 1px solid rgba(51,56,61,0.18); color: #6B7280; }
-.bottom { display: grid; grid-template-columns: 1fr 1fr 1fr; width: 100%; align-items: end; gap: 16px; }
-.sig-name { font-family: Georgia, serif; font-style: italic; font-size: 22px; color: #33383D; margin-bottom: 4px; }
-.sig-line { height: 1px; background: #33383D; margin-bottom: 5px; }
-.sig-label { font-size: 10px; color: #6B7280; }
-.sig-sub { font-size: 9px; color: #9CA3AF; line-height: 1.5; }
-.seal-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.seal { width: 72px; height: 72px; object-fit: contain; }
-.seal-fallback { width: 68px; height: 68px; border-radius: 50%; border: 2px solid ${trackColor}; display: flex; flex-direction: column; align-items: center; justify-content: center; background: ${trackColor}06; }
-.cert-id { font-family: 'JetBrains Mono', monospace; font-size: 8px; color: #9CA3AF; letter-spacing: 0.06em; }
+.bottom { display: grid; grid-template-columns: 1fr 1fr 1fr; width: 100%; align-items: end; gap: 20px; }
+.sig-name { font-family: Georgia, serif; font-style: italic; font-size: 36px; color: #33383D; margin-bottom: 5px; }
+.sig-line { height: 1px; background: #33383D; margin-bottom: 7px; }
+.sig-label { font-size: 16px; color: #6B7280; }
+.sig-sub { font-size: 14px; color: #9CA3AF; line-height: 1.5; }
+.seal-col { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.seal { width: 110px; height: 110px; object-fit: contain; }
+.seal-fallback { width: 100px; height: 100px; border-radius: 50%; border: 2px solid ${trackColor}; display: flex; flex-direction: column; align-items: center; justify-content: center; background: ${trackColor}06; }
+.cert-id { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #9CA3AF; letter-spacing: 0.06em; }
 .date-col { text-align: center; }
-.date-val { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; color: #33383D; margin-bottom: 5px; }
+.date-val { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 600; color: #33383D; margin-bottom: 6px; }
 </style>
 </head><body>
 <div class="cert">
