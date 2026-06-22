@@ -30,6 +30,7 @@ type Course = {
 export default function MyCoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [userName, setUserName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -44,11 +45,16 @@ export default function MyCoursesPage() {
       if (!user || userError) { window.location.href = '/signin'; return; }
 
       const { data: profile, error: profileError } = await supabase
-        .from('profiles').select('full_name, is_admin').eq('id', user.id).single();
+        .from('profiles').select('full_name, is_admin, avatar_url').eq('id', user.id).single();
       if (profileError) console.error('Profile fetch error:', profileError);
       if (profile) {
         setUserName(profile.full_name);
         setIsAdmin(!!profile.is_admin);
+        if (profile.avatar_url) {
+          const path = profile.avatar_url.split('/avatars/').pop() || profile.avatar_url;
+          const { data: signed } = await supabase.storage.from('avatars').createSignedUrl(path, 3600);
+          setAvatarUrl(signed?.signedUrl || '');
+        }
       }
 
       const { data: enrollments, error: enrollError } = await supabase
@@ -140,11 +146,14 @@ export default function MyCoursesPage() {
         <div style={{ flex: 1 }} />
         <div style={{
           width: 36, height: 36, borderRadius: '50%',
-          background: '#D59C10', color: '#1A1D21',
+          background: avatarUrl ? 'transparent' : '#D59C10', color: '#1A1D21',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 700, fontSize: 13, flexShrink: 0,
+          fontWeight: 700, fontSize: 13, flexShrink: 0, overflow: 'hidden',
+          border: avatarUrl ? '2px solid #D59C10' : 'none',
         }}>
-          {userName.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+          {avatarUrl
+            ? <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : userName.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
         </div>
       </nav>
 
