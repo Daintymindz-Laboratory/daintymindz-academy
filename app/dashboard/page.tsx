@@ -213,7 +213,15 @@ export default function Dashboard() {
         });
         setProfileName(profile.full_name || '');
         setProfileBio(profile.bio || '');
-        setProfileAvatarUrl(profile.avatar_url || '');
+        if (profile.avatar_url) {
+          const path = profile.avatar_url.split('/avatars/').pop();
+          if (path) {
+            const { data: signed } = await supabase.storage.from('avatars').createSignedUrl(path, 3600);
+            setProfileAvatarUrl(signed?.signedUrl || profile.avatar_url);
+          } else {
+            setProfileAvatarUrl(profile.avatar_url);
+          }
+        }
       }
 
       const enrolledIds = enrollments?.map((e: any) => e.course_id) || [];
@@ -594,10 +602,9 @@ export default function Dashboard() {
                 const supabase = createClient();
                 const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true });
                 if (!upErr) {
-                  const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-                  const url = urlData.publicUrl;
-                  await supabase.from('profiles').update({ avatar_url: url }).eq('id', authUserId);
-                  setProfileAvatarUrl(url);
+                  await supabase.from('profiles').update({ avatar_url: path }).eq('id', authUserId);
+                  const { data: signed } = await supabase.storage.from('avatars').createSignedUrl(path, 3600);
+                  setProfileAvatarUrl(signed?.signedUrl || '');
                 }
                 setProfileUploading(false);
                 e.target.value = '';
