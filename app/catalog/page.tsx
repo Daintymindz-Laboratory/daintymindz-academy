@@ -1,6 +1,8 @@
 'use client';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
+import ProfileButton from '@/components/ProfileButton';
+import { useUser } from '@/lib/user-context';
 
 const TRACKS = {
   AI: { label: 'Artificial Intelligence', color: '#D59C10', glow: 'rgba(213,156,16,0.15)' },
@@ -40,10 +42,18 @@ export default function Catalog() {
   const [enrolled, setEnrolled] = useState<number[]>([]);
   const [resumeMap, setResumeMap] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
+  const { user: ctxUser } = useUser();
   const [userName, setUserName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
   const [userId, setUserId] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (ctxUser) {
+      setUserName(ctxUser.name);
+      setIsAdmin(ctxUser.isAdmin);
+      setUserId(ctxUser.id);
+    }
+  }, [ctxUser]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -54,18 +64,6 @@ export default function Catalog() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { window.location.href = '/signin'; return; }
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles').select('full_name, is_admin, avatar_url').eq('id', user.id).single();
-      if (profileError) console.error('Profile fetch error:', profileError);
-      if (profile) {
-        setUserName(profile.full_name);
-        setIsAdmin(!!profile.is_admin);
-        if (profile.avatar_url) {
-          const path = profile.avatar_url.split('/avatars/').pop() || profile.avatar_url;
-          const { data: signed } = await supabase.storage.from('avatars').createSignedUrl(path, 3600);
-          setAvatarUrl(signed?.signedUrl || '');
-        }
-      }
       setUserId(user.id);
 
       const { data: coursesData, error: coursesError } = await supabase
@@ -162,17 +160,7 @@ export default function Catalog() {
             }}
           />
         </div>
-        <div style={{
-          width: 36, height: 36, borderRadius: '50%',
-          background: avatarUrl ? 'transparent' : '#D59C10', color: '#1A1D21',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0,
-          overflow: 'hidden', border: avatarUrl ? '2px solid #D59C10' : 'none',
-        }}>
-          {avatarUrl
-            ? <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : userName.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-        </div>
+        <ProfileButton />
       </nav>
 
       <div style={{ display: 'flex', flex: 1, paddingTop: 64 }}>

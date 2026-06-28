@@ -1,6 +1,8 @@
 'use client';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
+import ProfileButton from '@/components/ProfileButton';
+import { useUser } from '@/lib/user-context';
 
 const TRACKS: Record<string, { label: string; color: string; glow: string }> = {
   AI: { label: 'Artificial Intelligence', color: '#D59C10', glow: 'rgba(213,156,16,0.15)' },
@@ -28,10 +30,14 @@ type Course = {
 };
 
 export default function MyCoursesPage() {
+  const { user: ctxUser } = useUser();
   const [courses, setCourses] = useState<Course[]>([]);
   const [userName, setUserName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (ctxUser) { setUserName(ctxUser.name); setIsAdmin(ctxUser.isAdmin); }
+  }, [ctxUser]);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unenrolling, setUnenrolling] = useState<number | null>(null);
@@ -44,18 +50,6 @@ export default function MyCoursesPage() {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (!user || userError) { window.location.href = '/signin'; return; }
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles').select('full_name, is_admin, avatar_url').eq('id', user.id).single();
-      if (profileError) console.error('Profile fetch error:', profileError);
-      if (profile) {
-        setUserName(profile.full_name);
-        setIsAdmin(!!profile.is_admin);
-        if (profile.avatar_url) {
-          const path = profile.avatar_url.split('/avatars/').pop() || profile.avatar_url;
-          const { data: signed } = await supabase.storage.from('avatars').createSignedUrl(path, 3600);
-          setAvatarUrl(signed?.signedUrl || '');
-        }
-      }
 
       const { data: enrollments, error: enrollError } = await supabase
         .from('enrollments')
@@ -144,17 +138,7 @@ export default function MyCoursesPage() {
           <span className="dm-nav-academy" style={{ fontSize: 14, fontWeight: 300, color: '#6B7280', borderLeft: '1px solid #3A3F46', paddingLeft: 8 }}>Academy</span>
         </a>
         <div style={{ flex: 1 }} />
-        <div style={{
-          width: 36, height: 36, borderRadius: '50%',
-          background: avatarUrl ? 'transparent' : '#D59C10', color: '#1A1D21',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 700, fontSize: 13, flexShrink: 0, overflow: 'hidden',
-          border: avatarUrl ? '2px solid #D59C10' : 'none',
-        }}>
-          {avatarUrl
-            ? <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : userName.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-        </div>
+        <ProfileButton />
       </nav>
 
       <div style={{ display: 'flex', flex: 1, paddingTop: 64 }}>

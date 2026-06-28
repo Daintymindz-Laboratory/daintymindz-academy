@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { UserProvider } from "@/lib/user-context";
 
 export const metadata: Metadata = {
   title: "Daintymindz Academy",
@@ -34,7 +35,7 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
-      <body>{children}</body>
+      <body><UserProvider>{children}</UserProvider></body>
     </html>
   );
 }

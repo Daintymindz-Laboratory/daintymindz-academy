@@ -1,6 +1,7 @@
 'use client';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
+import { useUser } from '@/lib/user-context';
 
 const TRACKS = {
   AI: { label: 'Artificial Intelligence', color: '#D59C10', glow: 'rgba(213,156,16,0.15)' },
@@ -155,6 +156,7 @@ export default function Dashboard() {
     if (typeof window !== 'undefined') return localStorage.getItem('dm-sidebar-collapsed') === '1';
     return false;
   });
+  const { setAvatarUrl: setContextAvatarUrl } = useUser();
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [profileBio, setProfileBio] = useState('');
@@ -604,7 +606,9 @@ export default function Dashboard() {
                 if (!upErr) {
                   await supabase.from('profiles').update({ avatar_url: path }).eq('id', authUserId);
                   const { data: signed } = await supabase.storage.from('avatars').createSignedUrl(path, 3600);
-                  setProfileAvatarUrl(signed?.signedUrl || '');
+                  const signedUrl = signed?.signedUrl || '';
+                  setProfileAvatarUrl(signedUrl);
+                  setContextAvatarUrl(signedUrl);
                 }
                 setProfileUploading(false);
                 e.target.value = '';
