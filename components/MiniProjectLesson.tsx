@@ -71,7 +71,19 @@ export default function MiniProjectLesson({
     const allResults: TestResult[] = [];
 
     for (const tc of testCases) {
-      const fullCode = code + '\n' + tc.test_code;
+      // Parse test_code for variable override lines (e.g. celsius = 0)
+      // and substitute them into the student's code so the student's
+      // formula/print runs with the test values, not their hardcoded ones.
+      const overrides: Record<string, string> = {};
+      for (const line of tc.test_code.split('\n')) {
+        const m = line.match(/^([A-Za-z_]\w*)\s*=\s*(.+)$/);
+        if (m) overrides[m[1]] = line;
+      }
+      const studentLines = code.split('\n').map(line => {
+        const m = line.match(/^([A-Za-z_]\w*)\s*=/);
+        return (m && overrides[m[1]]) ? overrides[m[1]] : line;
+      });
+      const fullCode = studentLines.join('\n');
       const id = ++runIdRef.current;
 
       const result = await new Promise<TestResult>((resolve) => {
