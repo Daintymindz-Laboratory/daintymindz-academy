@@ -22,7 +22,10 @@ self.onmessage = async (e) => {
     }
     try {
       outputBuffer = '';
-      pyodide.globals.set('print', (...args) => {
+
+      // Fresh namespace per run so variables never leak between test cases.
+      const ns = pyodide.globals.get('dict')();
+      ns.set('print', (...args) => {
         outputBuffer += args.join(' ') + '\n';
       });
 
@@ -30,7 +33,8 @@ self.onmessage = async (e) => {
         await pyodide.loadPackagesFromImports(code);
       } catch (_) {}
 
-      await pyodide.runPythonAsync(code);
+      await pyodide.runPythonAsync(code, { globals: ns });
+      ns.destroy();
       self.postMessage({ type: 'output', output: outputBuffer || '(no output)', runId });
     } catch (err) {
       self.postMessage({ type: 'error', error: String(err.message || err), runId });
