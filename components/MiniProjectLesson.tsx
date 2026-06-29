@@ -54,7 +54,7 @@ export default function MiniProjectLesson({
     };
     load();
 
-    const worker = new Worker('/pyodide-worker.js');
+    const worker = new Worker(`/pyodide-worker.js?v=16e856b`);
     workerRef.current = worker;
     worker.onmessage = (e) => {
       if (e.data.type === 'ready') setPyodideReady(true);
