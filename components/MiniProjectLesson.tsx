@@ -101,10 +101,13 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
     const allResults: TestResult[] = [];
 
     for (const tc of testCases) {
+      console.log('[MiniProject] test case raw data:', JSON.stringify({ id: tc.id, description: tc.description, test_code: tc.test_code, expected_output: tc.expected_output }));
+
       // If test_code is empty, derive variable overrides from the description
       // (format: "celsius = 0, miles = 5") by splitting on commas.
       const rawTestCode = tc.test_code?.trim()
         || tc.description.split(',').map(s => s.trim()).join('\n');
+      console.log('[MiniProject] rawTestCode:', JSON.stringify(rawTestCode));
 
       // Build variable overrides from test_code (e.g. celsius = 0).
       // Substitute into student code where the variable is defined,
@@ -124,6 +127,7 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
         .filter(([k]) => !injected.has(k))
         .map(([, v]) => v);
       const fullCode = [...prefix, ...studentLines].join('\n');
+      console.log('[MiniProject] fullCode for test', tc.id, ':\n' + fullCode);
       const id = ++runIdRef.current;
 
       const result = await new Promise<TestResult>((resolve) => {
