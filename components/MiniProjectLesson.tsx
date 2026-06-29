@@ -114,34 +114,59 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
     const allResults: TestResult[] = [];
 
     for (const tc of testCases) {
-      // Normalize expected output: admins sometimes use " / " as a line
-      // separator instead of a real newline, so replace it before comparing.
-      const normalizeOutput = (s: string) => s.trim().replace(/ \/ /g, '\n');
+      // Normalize output before comparing:
+      // - " / " is used by admins as a newline separator
+      // - Python uses single quotes in repr/tuple output; expected often has double quotes
+      const normalizeOutput = (s: string) =>
+        s.trim().replace(/ \/ /g, '\n').replace(/'/g, '"');
 
-      // Determine how to drive this test case from its description:
+      // Replace a (potentially multi-line) variable assignment in student code.
+      // Tracks bracket depth so it handles `var = [\n  ...\n]` correctly.
+      const replaceAssignment = (src: string, varName: string, newValue: string): string => {
+        const lines = src.split('\n');
+        const start = lines.findIndex(l => new RegExp(`^\\s*${varName}\\s*=`).test(l));
+        if (start === -1) return src;
+        let depth = 0;
+        let end = start;
+        for (let i = start; i < lines.length; i++) {
+          for (const ch of lines[i]) {
+            if ('([{'.includes(ch)) depth++;
+            if (')]}'.includes(ch)) depth--;
+          }
+          if (i > start && depth <= 0) { end = i; break; }
+          if (i === start && depth === 0) { end = i; break; }
+        }
+        return [...lines.slice(0, start), `${varName} = ${newValue}`, ...lines.slice(end + 1)].join('\n');
+      };
+
+      // Determine how to drive this test case from its description.
       //
-      // Case A - variable-substitution: description is comma-separated
-      //   assignments like "celsius = 0, miles = 5". Parse them as overrides
-      //   and substitute into the student's code in-place.
+      // Case A - data literal: description starts with [ or { (a list or dict
+      //   value). Find the first top-level list/dict assignment in student code
+      //   and replace the whole block with the test value.
       //
-      // Case B - function-call: description is a call like
-      //   "guessing_game(7, [7])". Strip any top-level calls of that function
-      //   from the student's code and append the description call instead.
+      // Case B - function call: description is "funcname(args)". Strip the
+      //   student's own top-level calls to that function and append this call.
+      //
+      // Case C - variable assignments: "celsius = 0, miles = 5". Substitute
+      //   matching lines in student code in-place.
       const desc = tc.description.trim();
-      const isFunctionCall = /^[A-Za-z_]\w*\s*\(/.test(desc);
+      const isDataLiteral = /^[\[{]/.test(desc);
+      const isFunctionCall = !isDataLiteral && /^[A-Za-z_]\w*\s*\(/.test(desc);
 
       let fullCode: string;
 
-      if (isFunctionCall) {
-        // Extract the function name so we can remove the student's example call.
+      if (isDataLiteral) {
+        // Find the first variable assigned a list/dict at the top level.
+        const assignLine = code.split('\n').find(l => /^[A-Za-z_]\w*\s*=\s*[\[{]/.test(l.trim()));
+        const varName = assignLine?.match(/^([A-Za-z_]\w*)\s*=/)?.[1];
+        fullCode = varName ? replaceAssignment(code, varName, desc) : code;
+      } else if (isFunctionCall) {
         const funcName = desc.match(/^([A-Za-z_]\w*)\s*\(/)?.[1] ?? '';
         const callRegex = funcName ? new RegExp(`^${funcName}\\s*\\(`) : null;
-        const studentLines = code.split('\n').filter(line =>
-          callRegex ? !callRegex.test(line.trim()) : true
-        );
+        const studentLines = code.split('\n').filter(l => callRegex ? !callRegex.test(l.trim()) : true);
         fullCode = [...studentLines, '', desc].join('\n');
       } else {
-        // Variable-substitution path.
         const overrides: Record<string, string> = {};
         for (const part of desc.split(',')) {
           const m = part.trim().match(/^([A-Za-z_]\w*)\s*=\s*(.+)$/);
@@ -153,9 +178,7 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
           if (m && overrides[m[1]]) { injected.add(m[1]); return overrides[m[1]]; }
           return line;
         });
-        const prefix = Object.entries(overrides)
-          .filter(([k]) => !injected.has(k))
-          .map(([, v]) => v);
+        const prefix = Object.entries(overrides).filter(([k]) => !injected.has(k)).map(([, v]) => v);
         fullCode = [...prefix, ...studentLines].join('\n');
       }
 
