@@ -2,13 +2,11 @@
 import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import dynamic from 'next/dynamic';
-import ReactMarkdown from 'react-markdown';
 import LessonContent from '@/components/LessonContent';
 import QuizLesson from '@/components/QuizLesson';
 import MiniProjectLesson from '@/components/MiniProjectLesson';
+import ProjectLesson from '@/components/ProjectLesson';
 
-const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
 type Lesson = {
   id: number;
@@ -70,13 +68,6 @@ export default function LessonPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const [code, setCode] = useState('');
-  const [output, setOutput] = useState('');
-  const [running, setRunning] = useState(false);
-  const [pyodideReady, setPyodideReady] = useState(false);
-  const [activeTab, setActiveTab] = useState<'instructions' | 'output'>('instructions');
-  const workerRef = useRef<Worker | null>(null);
-  const runTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [notesSaved, setNotesSaved] = useState(false);
@@ -109,7 +100,6 @@ export default function LessonPage() {
         : (lessonsData.find((l: Lesson) => l.id === parseInt(lessonId)) || lessonsData[0]);
       if (target) {
         setCurrentLesson(target);
-        setCode(target.starter_code || target.code || '');
         const { data: noteData } = await supabase.from('lesson_notes').select('note').eq('user_id', user.id).eq('lesson_id', target.id).maybeSingle();
         setNoteText(noteData?.note || '');
       }
@@ -124,15 +114,6 @@ export default function LessonPage() {
     };
     init();
   }, [courseId, lessonId]);
-
-  useEffect(() => {
-    if (currentLesson?.type !== 'project' || currentLesson?.language !== 'python' || workerRef.current) return;
-    const worker = new Worker('/pyodide-worker.js');
-    workerRef.current = worker;
-    worker.onmessage = (e) => { if (e.data.type === 'ready') setPyodideReady(true); };
-    worker.onerror = () => setPyodideReady(false);
-    return () => { worker.terminate(); workerRef.current = null; };
-  }, [currentLesson]);
 
   useEffect(() => {
     if (currentLesson?.type !== 'lesson' || !currentLesson?.content?.includes('python-run') || inlineWorkerRef.current) return;
@@ -168,9 +149,6 @@ export default function LessonPage() {
 
   const switchLesson = (lesson: Lesson) => {
     setCurrentLesson(lesson);
-    setCode(lesson.starter_code || lesson.code || '');
-    setOutput('');
-    setActiveTab('instructions');
     setSidebarOpen(false);
     setNoteText('');
     if (userId) loadNote(Number(lesson.id), userId);
@@ -214,27 +192,11 @@ export default function LessonPage() {
       // Gated lesson types (quiz, mini_project) stay on the current lesson
       // after passing so the student can review their work. The Next button
       // becomes enabled once isCompleted is true.
-      const gated = ['quiz', 'mini_project'];
+      const gated = ['quiz', 'mini_project', 'project'];
       if (nextLesson && !gated.includes(currentLesson.type)) switchLesson(nextLesson);
     }
   };
 
-  const runCode = () => {
-    if (!workerRef.current || !pyodideReady) return;
-    setRunning(true); setActiveTab('output'); setOutput('Running...\n');
-    if (runTimeoutRef.current) clearTimeout(runTimeoutRef.current);
-    const worker = workerRef.current;
-    runTimeoutRef.current = setTimeout(() => {
-      worker.terminate(); workerRef.current = null; setPyodideReady(false);
-      setOutput('Error:\nExecution timed out after 10 seconds.'); setRunning(false);
-    }, 10000);
-    const handleMsg = (e: MessageEvent) => {
-      if (e.data.type === 'output') { clearTimeout(runTimeoutRef.current!); setOutput(e.data.output); setRunning(false); worker.removeEventListener('message', handleMsg); }
-      else if (e.data.type === 'error') { clearTimeout(runTimeoutRef.current!); setOutput(`Error:\n${e.data.error}`); setRunning(false); worker.removeEventListener('message', handleMsg); }
-    };
-    worker.addEventListener('message', handleMsg);
-    worker.postMessage({ type: 'run', code });
-  };
 
   const copyCode = () => { navigator.clipboard.writeText(currentLesson?.code || ''); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
@@ -324,56 +286,20 @@ export default function LessonPage() {
         </aside>
 
         {lessonType === 'project' ? (
-          <div className="lesson-split">
-            <div style={{ borderRight: '1px solid #2A2F35', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', borderBottom: '1px solid #2A2F35', flexShrink: 0 }}>
-                {(['instructions', 'output'] as const).map(tab => (
-                  <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '12px 20px', background: 'none', border: 'none', borderBottom: activeTab === tab ? `2px solid ${trackColor}` : '2px solid transparent', color: activeTab === tab ? '#F5F5F5' : '#6B7280', fontSize: 13, fontWeight: activeTab === tab ? 600 : 400, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', textTransform: 'capitalize' }}>
-                    {tab}{tab === 'output' && output && <span style={{ marginLeft: 6, width: 6, height: 6, borderRadius: '50%', background: trackColor, display: 'inline-block', verticalAlign: 'middle' }} />}
-                  </button>
-                ))}
-              </div>
-              <div style={{ flex: 1, overflowY: 'auto', padding: '2rem 2.5rem' }}>
-                {activeTab === 'output' ? (
-                  <div>
-                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 14 }}>Output</div>
-                    {output ? <pre style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, color: output.startsWith('Error') ? '#F87171' : '#4CAF7D', lineHeight: 1.75, background: '#22262B', border: '1px solid #2A2F35', borderRadius: 14, padding: '16px 18px', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{output}</pre> : <div style={{ color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>{'// run your code to see output here'}</div>}
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: typeColor, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 10 }}>Project</div>
-                      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#F5F5F5', lineHeight: 1.2, marginBottom: 8, letterSpacing: '-0.02em' }}>{currentLesson.title}</h1>
-                    </div>
-                    {embedUrl && <div style={{ marginBottom: '1.5rem', borderRadius: 12, overflow: 'hidden', border: '1px solid #2A2F35' }}><iframe src={embedUrl} width="100%" height="315" style={{ display: 'block', border: 'none' }} allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" /></div>}
-                    {currentLesson.instructions && <div style={{ fontSize: 15, lineHeight: 1.8, color: '#9CA3AF' }}><ReactMarkdown components={{ h1: ({ children }) => <h1 style={{ fontSize: 20, fontWeight: 700, color: '#F5F5F5', margin: '1.25rem 0 0.75rem' }}>{children}</h1>, h2: ({ children }) => <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5', margin: '1.25rem 0 0.75rem' }}>{children}</h2>, p: ({ children }) => <p style={{ marginBottom: '1rem', color: '#9CA3AF' }}>{children}</p>, strong: ({ children }) => <strong style={{ color: '#F5F5F5' }}>{children}</strong>, ul: ({ children }) => <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>{children}</ul>, li: ({ children }) => <li style={{ marginBottom: '0.4rem', color: '#9CA3AF' }}>{children}</li> }}>{currentLesson.instructions}</ReactMarkdown></div>}
-                  </>
-                )}
-              </div>
-              <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #2A2F35', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: 10 }}>
-                {prevBtn}
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button onClick={runCode} disabled={running || !pyodideReady} style={{ padding: '9px 20px', borderRadius: 50, background: running ? '#22262B' : trackColor, border: running ? '1px solid #3A3F46' : 'none', color: running ? '#6B7280' : '#1A1D21', fontSize: 13, fontWeight: 700, cursor: running || !pyodideReady ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>{running ? 'Running...' : pyodideReady ? 'Run Code' : 'Loading Python...'}</button>
-                  <button onClick={markComplete} style={{ padding: '9px 20px', borderRadius: 50, background: isCompleted ? 'rgba(76,175,125,0.1)' : 'transparent', border: isCompleted ? '1px solid rgba(76,175,125,0.3)' : `1px solid ${trackColor}50`, color: isCompleted ? '#4CAF7D' : trackColor, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>{isCompleted ? 'Completed' : isLastLesson ? 'Submit & Earn Certificate' : 'Mark Complete'}</button>
-                </div>
-                {nextBtn}
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#1A1D21', borderBottom: '1px solid #2A2F35', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ display: 'flex', gap: 5 }}><div style={{ width: 10, height: 10, borderRadius: '50%', background: '#3A3F46' }} /><div style={{ width: 10, height: 10, borderRadius: '50%', background: '#3A3F46' }} /><div style={{ width: 10, height: 10, borderRadius: '50%', background: '#3A3F46' }} /></div>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#6B7280', marginLeft: 8 }}>{currentLesson.code_label || 'solution.py'}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{currentLesson.language || 'python'}</span>
-                  <button onClick={() => setCode(currentLesson.starter_code || '')} style={{ background: 'transparent', border: '1px solid #2A2F35', borderRadius: 20, padding: '4px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#6B7280', cursor: 'pointer' }}>Reset</button>
-                </div>
-              </div>
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                <Editor height="100%" language={currentLesson.language || 'python'} value={code} onChange={val => setCode(val || '')} theme="vs-dark" options={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', minimap: { enabled: false }, scrollBeyondLastLine: false, lineNumbers: 'on', padding: { top: 16, bottom: 16 }, wordWrap: 'on', tabSize: 4, automaticLayout: true }} />
-              </div>
-            </div>
+          <div className="dm-lesson-main">
+            <ProjectLesson
+              lessonId={Number(currentLesson.id)}
+              userId={userId}
+              trackColor={trackColor}
+              starterCode={currentLesson.starter_code || ''}
+              instructions={currentLesson.instructions || ''}
+              language={currentLesson.language || 'python'}
+              codeLabel={currentLesson.code_label || 'solution.py'}
+              embedUrl={embedUrl}
+              isCompleted={isCompleted}
+              onComplete={markComplete}
+            />
+            {simpleNavBar}
           </div>
         ) : lessonType === 'quiz' ? (
           <div className="dm-lesson-main">
