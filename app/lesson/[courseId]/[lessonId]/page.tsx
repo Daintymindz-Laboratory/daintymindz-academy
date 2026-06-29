@@ -211,7 +211,11 @@ export default function LessonPage() {
       await supabase.from('certificates').insert({ user_id: userId, course_id: parseInt(courseId), cert_id: certId });
       window.location.href = '/certificates';
     } else {
-      if (nextLesson) switchLesson(nextLesson);
+      // Gated lesson types (quiz, mini_project) stay on the current lesson
+      // after passing so the student can review their work. The Next button
+      // becomes enabled once isCompleted is true.
+      const gated = ['quiz', 'mini_project'];
+      if (nextLesson && !gated.includes(currentLesson.type)) switchLesson(nextLesson);
     }
   };
 

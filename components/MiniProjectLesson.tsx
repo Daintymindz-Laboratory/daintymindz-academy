@@ -32,8 +32,12 @@ interface Props {
 export default function MiniProjectLesson({
   lessonId, userId, trackColor, starterCode, instructions, isCompleted, onComplete,
 }: Props) {
+  const storageKey = `dm_mp_code_${lessonId}`;
+
   const [testCases, setTestCases] = useState<TestCase[]>([]);
-  const [code, setCode] = useState(starterCode || '# Write your solution here\n');
+  const [code, setCode] = useState(() => {
+    try { return localStorage.getItem(storageKey) || starterCode || '# Write your solution here\n'; } catch { return starterCode || '# Write your solution here\n'; }
+  });
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<TestResult[]>([]);
   const [pyodideReady, setPyodideReady] = useState(false);
@@ -41,16 +45,25 @@ export default function MiniProjectLesson({
   const workerRef = useRef<Worker | null>(null);
   const runIdRef = useRef(0);
 
+  // Persist code to localStorage on every edit.
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, code); } catch { /* ignore */ }
+  }, [code, storageKey]);
+
   useEffect(() => {
     const load = async () => {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
-      const { data } = await supabase
-        .from('mini_project_test_cases')
-        .select('*')
-        .eq('lesson_id', lessonId)
-        .order('order_index');
-      setTestCases(data || []);
+      const [{ data: tcData }, { data: resultData }] = await Promise.all([
+        supabase.from('mini_project_test_cases').select('*').eq('lesson_id', lessonId).order('order_index'),
+        supabase.from('mini_project_results').select('submitted_code').eq('lesson_id', lessonId).eq('user_id', userId).maybeSingle(),
+      ]);
+      setTestCases(tcData || []);
+      // If there is a saved submission, restore it (takes precedence over localStorage).
+      if (resultData?.submitted_code) {
+        setCode(resultData.submitted_code);
+        try { localStorage.setItem(storageKey, resultData.submitted_code); } catch { /* ignore */ }
+      }
     };
     load();
 
@@ -158,7 +171,8 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
     await supabase.from('mini_project_results').upsert(
       {
         user_id: userId, lesson_id: lessonId,
-        all_passed: allPassed, attempts: 1,
+        all_passed: allPassed,
+        submitted_code: code,
         last_attempt_at: new Date().toISOString(),
       },
       { onConflict: 'user_id,lesson_id' }
@@ -183,6 +197,20 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
           fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: trackColor,
           letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 12,
         }}>Mini Project</div>
+
+        {(allPassed || isCompleted) && (
+          <div style={{
+            padding: '12px 16px', borderRadius: 12, marginBottom: 16,
+            background: 'rgba(76,175,125,0.08)', border: '1px solid rgba(76,175,125,0.3)',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span style={{ fontSize: 18 }}>✓</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#4CAF7D' }}>All tests passed!</div>
+              <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>Click <strong style={{ color: '#F5F5F5' }}>Next</strong> in the toolbar to continue.</div>
+            </div>
+          </div>
+        )}
 
         {instructions && (
           <div style={{ fontSize: 14, color: '#9CA3AF', lineHeight: 1.7, marginBottom: '1.25rem', whiteSpace: 'pre-wrap' }}>
