@@ -114,26 +114,51 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
     const allResults: TestResult[] = [];
 
     for (const tc of testCases) {
-      // Extract variable overrides from the description field.
-      // Description is always in the format "var1 = val1, var2 = val2".
-      // test_code is NOT used for overrides - admins have been entering print
-      // statements there, not variable assignments.
-      const overrides: Record<string, string> = {};
-      for (const part of tc.description.split(',')) {
-        const m = part.trim().match(/^([A-Za-z_]\w*)\s*=\s*(.+)$/);
-        if (m) overrides[m[1]] = `${m[1]} = ${m[2].trim()}`;
+      // Normalize expected output: admins sometimes use " / " as a line
+      // separator instead of a real newline, so replace it before comparing.
+      const normalizeOutput = (s: string) => s.trim().replace(/ \/ /g, '\n');
+
+      // Determine how to drive this test case from its description:
+      //
+      // Case A - variable-substitution: description is comma-separated
+      //   assignments like "celsius = 0, miles = 5". Parse them as overrides
+      //   and substitute into the student's code in-place.
+      //
+      // Case B - function-call: description is a call like
+      //   "guessing_game(7, [7])". Strip any top-level calls of that function
+      //   from the student's code and append the description call instead.
+      const desc = tc.description.trim();
+      const isFunctionCall = /^[A-Za-z_]\w*\s*\(/.test(desc);
+
+      let fullCode: string;
+
+      if (isFunctionCall) {
+        // Extract the function name so we can remove the student's example call.
+        const funcName = desc.match(/^([A-Za-z_]\w*)\s*\(/)?.[1] ?? '';
+        const callRegex = funcName ? new RegExp(`^${funcName}\\s*\\(`) : null;
+        const studentLines = code.split('\n').filter(line =>
+          callRegex ? !callRegex.test(line.trim()) : true
+        );
+        fullCode = [...studentLines, '', desc].join('\n');
+      } else {
+        // Variable-substitution path.
+        const overrides: Record<string, string> = {};
+        for (const part of desc.split(',')) {
+          const m = part.trim().match(/^([A-Za-z_]\w*)\s*=\s*(.+)$/);
+          if (m) overrides[m[1]] = `${m[1]} = ${m[2].trim()}`;
+        }
+        const injected = new Set<string>();
+        const studentLines = code.split('\n').map(line => {
+          const m = line.match(/^([A-Za-z_]\w*)\s*=/);
+          if (m && overrides[m[1]]) { injected.add(m[1]); return overrides[m[1]]; }
+          return line;
+        });
+        const prefix = Object.entries(overrides)
+          .filter(([k]) => !injected.has(k))
+          .map(([, v]) => v);
+        fullCode = [...prefix, ...studentLines].join('\n');
       }
-      const injected = new Set<string>();
-      const studentLines = code.split('\n').map(line => {
-        const m = line.match(/^([A-Za-z_]\w*)\s*=/);
-        if (m && overrides[m[1]]) { injected.add(m[1]); return overrides[m[1]]; }
-        return line;
-      });
-      const prefix = Object.entries(overrides)
-        .filter(([k]) => !injected.has(k))
-        .map(([, v]) => v);
-      const fullCode = [...prefix, ...studentLines].join('\n');
-      console.log('[MiniProject] fullCode for test', tc.id, ':\n' + fullCode);
+
       const id = ++runIdRef.current;
 
       const result = await new Promise<TestResult>((resolve) => {
@@ -146,8 +171,8 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
           clearTimeout(timeoutId);
           workerRef.current?.removeEventListener('message', handleMsg);
           if (e.data.type === 'output') {
-            const actual = e.data.output.trim();
-            const expected = tc.expected_output.trim();
+            const actual = normalizeOutput(e.data.output);
+            const expected = normalizeOutput(tc.expected_output);
             resolve({ id: tc.id, passed: actual === expected, actual });
           } else {
             resolve({ id: tc.id, passed: false, actual: '', error: e.data.error });
