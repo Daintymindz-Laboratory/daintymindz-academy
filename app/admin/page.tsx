@@ -273,7 +273,7 @@ export default function AdminPage() {
       if (editingLesson.type === 'quiz') {
         const { data } = await supabase.from('quiz_questions').select('*').eq('lesson_id', editingLesson.id).order('order_index');
         setQuizQuestions((data || []).map((q: any) => ({ ...q, options: Array.isArray(q.options) ? q.options : JSON.parse(q.options || '[]') })));
-      } else if (editingLesson.type === 'mini_project') {
+      } else if (editingLesson.type === 'mini_project' || editingLesson.type === 'project') {
         const { data } = await supabase.from('mini_project_test_cases').select('*').eq('lesson_id', editingLesson.id).order('order_index');
         setTestCases(data || []);
       }
@@ -1015,8 +1015,8 @@ export default function AdminPage() {
                           </div>
                         )}
 
-                        {/* MINI_PROJECT type fields */}
-                        {editingLesson.type === 'mini_project' && (
+                        {/* MINI_PROJECT / PROJECT type fields */}
+                        {(editingLesson.type === 'mini_project' || editingLesson.type === 'project') && (
                           <div>
                             <div data-color-mode="dark" style={{ marginBottom: 16 }}>
                               <label style={{ ...labelStyle, marginBottom: 10 }}>Instructions (shown to students above the editor)</label>
