@@ -71,11 +71,16 @@ export default function MiniProjectLesson({
     const allResults: TestResult[] = [];
 
     for (const tc of testCases) {
+      // If test_code is empty, derive variable overrides from the description
+      // (format: "celsius = 0, miles = 5") by splitting on commas.
+      const rawTestCode = tc.test_code?.trim()
+        || tc.description.split(',').map(s => s.trim()).join('\n');
+
       // Build variable overrides from test_code (e.g. celsius = 0).
       // Substitute into student code where the variable is defined,
       // and prepend any that the student didn't define so they're always set.
       const overrides: Record<string, string> = {};
-      for (const line of tc.test_code.split('\n')) {
+      for (const line of rawTestCode.split('\n')) {
         const m = line.match(/^([A-Za-z_]\w*)\s*=\s*(.+)$/);
         if (m) overrides[m[1]] = line;
       }
