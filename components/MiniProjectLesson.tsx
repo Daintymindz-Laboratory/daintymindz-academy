@@ -163,9 +163,19 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
         fullCode = varName ? replaceAssignment(code, varName, desc) : code;
       } else if (isFunctionCall) {
         const funcName = desc.match(/^([A-Za-z_]\w*)\s*\(/)?.[1] ?? '';
-        const callRegex = funcName ? new RegExp(`^${funcName}\\s*\\(`) : null;
-        const studentLines = code.split('\n').filter(l => callRegex ? !callRegex.test(l.trim()) : true);
-        fullCode = [...studentLines, '', desc].join('\n');
+        // If the student wraps the call in print(), the function returns a
+        // value and we must also wrap the test call. If they call it directly
+        // the function prints on its own.
+        const printWrapped = code.includes(`print(${funcName}(`);
+        const callToAppend = printWrapped ? `print(${desc})` : desc;
+        const studentLines = code.split('\n').filter(l => {
+          const trimmed = l.trim();
+          if (!trimmed || trimmed.startsWith('def ') || trimmed.startsWith('class ')) return true;
+          // Strip any top-level line (no leading whitespace) that references the function.
+          const isTopLevel = l.length > 0 && l[0] !== ' ' && l[0] !== '\t';
+          return !(isTopLevel && trimmed.includes(`${funcName}(`));
+        });
+        fullCode = [...studentLines, '', callToAppend].join('\n');
       } else {
         const overrides: Record<string, string> = {};
         for (const part of desc.split(',')) {
