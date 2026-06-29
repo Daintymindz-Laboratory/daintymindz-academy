@@ -101,21 +101,14 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
     const allResults: TestResult[] = [];
 
     for (const tc of testCases) {
-      console.log('[MiniProject] test case raw data:', JSON.stringify({ id: tc.id, description: tc.description, test_code: tc.test_code, expected_output: tc.expected_output }));
-
-      // If test_code is empty, derive variable overrides from the description
-      // (format: "celsius = 0, miles = 5") by splitting on commas.
-      const rawTestCode = tc.test_code?.trim()
-        || tc.description.split(',').map(s => s.trim()).join('\n');
-      console.log('[MiniProject] rawTestCode:', JSON.stringify(rawTestCode));
-
-      // Build variable overrides from test_code (e.g. celsius = 0).
-      // Substitute into student code where the variable is defined,
-      // and prepend any that the student didn't define so they're always set.
+      // Extract variable overrides from the description field.
+      // Description is always in the format "var1 = val1, var2 = val2".
+      // test_code is NOT used for overrides - admins have been entering print
+      // statements there, not variable assignments.
       const overrides: Record<string, string> = {};
-      for (const line of rawTestCode.split('\n')) {
-        const m = line.match(/^([A-Za-z_]\w*)\s*=\s*(.+)$/);
-        if (m) overrides[m[1]] = line;
+      for (const part of tc.description.split(',')) {
+        const m = part.trim().match(/^([A-Za-z_]\w*)\s*=\s*(.+)$/);
+        if (m) overrides[m[1]] = `${m[1]} = ${m[2].trim()}`;
       }
       const injected = new Set<string>();
       const studentLines = code.split('\n').map(line => {
