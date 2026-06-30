@@ -74,7 +74,7 @@ let pyodide = null;
 self.importScripts('https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js');
 async function init() {
   pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/' });
-  pyodide.runPython('import sys, io');
+  pyodide.runPython('import sys, io; _orig_stdout = sys.stdout');
   self.postMessage({ type: 'ready' });
 }
 self.onmessage = async (e) => {
@@ -82,14 +82,20 @@ self.onmessage = async (e) => {
   if (type !== 'run') return;
   if (!pyodide) { self.postMessage({ type: 'error', error: 'Pyodide not loaded yet.', runId }); return; }
   try {
-    pyodide.runPython("for _k in [k for k in list(globals()) if not k.startswith('_') and k not in ('sys','io')]: del globals()[_k]");
-    pyodide.runPython('_buf = io.StringIO(); _prev = sys.stdout; sys.stdout = _buf');
     try { await pyodide.loadPackagesFromImports(code); } catch (_) {}
-    await pyodide.runPythonAsync(code);
-    const out = pyodide.runPython('sys.stdout = _prev; _buf.getvalue()');
+    pyodide.globals.set('_code', code);
+    const out = await pyodide.runPythonAsync(\`
+_buf = io.StringIO()
+sys.stdout = _buf
+try:
+    exec(compile(_code, '<student>', 'exec'), {'__builtins__': __builtins__})
+finally:
+    sys.stdout = _orig_stdout
+_buf.getvalue()
+\`);
     self.postMessage({ type: 'output', output: out || '(no output)', runId });
   } catch (err) {
-    try { pyodide.runPython('sys.stdout = _prev'); } catch (_) {}
+    try { pyodide.runPython('sys.stdout = _orig_stdout'); } catch (_) {}
     self.postMessage({ type: 'error', error: String(err.message || err), runId });
   }
 };
