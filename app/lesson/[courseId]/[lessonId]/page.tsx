@@ -288,6 +288,7 @@ export default function LessonPage() {
         {lessonType === 'project' ? (
           <div className="dm-lesson-main">
             <ProjectLesson
+              key={currentLesson.id}
               lessonId={Number(currentLesson.id)}
               userId={userId}
               trackColor={trackColor}
@@ -310,7 +311,7 @@ export default function LessonPage() {
           </div>
         ) : lessonType === 'mini_project' ? (
           <div className="dm-lesson-main">
-            <MiniProjectLesson lessonId={Number(currentLesson.id)} userId={userId} trackColor={trackColor} starterCode={currentLesson.starter_code || ''} instructions={currentLesson.instructions || ''} isCompleted={isCompleted} onComplete={markComplete} />
+            <MiniProjectLesson key={currentLesson.id} lessonId={Number(currentLesson.id)} userId={userId} trackColor={trackColor} starterCode={currentLesson.starter_code || ''} instructions={currentLesson.instructions || ''} isCompleted={isCompleted} onComplete={markComplete} />
             {simpleNavBar}
           </div>
         ) : (
