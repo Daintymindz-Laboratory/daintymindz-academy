@@ -198,6 +198,9 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
         fullCode = [...prefix, ...studentLines].join('\n');
       }
 
+      console.log('[MiniProject] test:', tc.description);
+      console.log('[MiniProject] fullCode:\n', fullCode);
+
       const id = ++runIdRef.current;
 
       const result = await new Promise<TestResult>((resolve) => {
