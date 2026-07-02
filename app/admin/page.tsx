@@ -38,6 +38,22 @@ type Lesson = {
   video_url: string;
   order_index: number;
   is_published: boolean;
+  requires_review: boolean;
+};
+
+type Submission = {
+  id: number;
+  user_id: string;
+  lesson_id: number;
+  submission_url: string;
+  note: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  feedback: string | null;
+  created_at: string;
+  studentName: string;
+  studentEmail: string;
+  lessonTitle: string;
+  courseTitle: string;
 };
 
 const FALLBACK_TRACKS: Record<string, { label: string; color: string }> = {
@@ -75,7 +91,11 @@ export default function AdminPage() {
   const [adminProfileSaving, setAdminProfileSaving] = useState(false);
   const [adminProfiles, setAdminProfiles] = useState<{ id: string; full_name: string; position: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'reviews'>('courses');
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [reviewFeedback, setReviewFeedback] = useState('');
+  const [savingReview, setSavingReview] = useState(false);
   const [tracks, setTracks] = useState<Track[]>(Object.entries(FALLBACK_TRACKS).map(([code, t]) => ({ code, ...t })));
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
   const [savingTrack, setSavingTrack] = useState(false);
@@ -134,6 +154,7 @@ export default function AdminPage() {
       await loadCourses(supabase);
       await loadStudents(supabase);
       await loadAnalytics(supabase);
+      await loadSubmissions(supabase);
       const { data: admins } = await supabase.from('profiles').select('id, full_name, position').eq('is_admin', true).order('full_name');
       if (admins) setAdminProfiles(admins);
       setLoading(false);
@@ -186,6 +207,52 @@ export default function AdminPage() {
   const loadStudents = async (supabase: any) => {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (data) setStudents(data);
+  };
+
+  const loadSubmissions = async (supabase: any) => {
+    const { data: subs } = await supabase.from('lesson_submissions').select('*').order('created_at', { ascending: false });
+    if (!subs || subs.length === 0) { setSubmissions([]); return; }
+    const userIds = Array.from(new Set(subs.map((s: any) => s.user_id)));
+    const lessonIds = Array.from(new Set(subs.map((s: any) => s.lesson_id)));
+    const [{ data: profilesData }, { data: lessonsData }] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, email').in('id', userIds),
+      supabase.from('lessons').select('id, title, course_id').in('id', lessonIds),
+    ]);
+    const profileMap: Record<string, { full_name: string; email: string }> = {};
+    (profilesData || []).forEach((p: any) => { profileMap[p.id] = p; });
+    const lessonMap: Record<number, { title: string; course_id: number }> = {};
+    (lessonsData || []).forEach((l: any) => { lessonMap[l.id] = l; });
+    const courseIds = Array.from(new Set(Object.values(lessonMap).map((l: any) => l.course_id)));
+    const { data: coursesData } = courseIds.length
+      ? await supabase.from('courses').select('id, title').in('id', courseIds)
+      : { data: [] };
+    const courseMap: Record<number, string> = {};
+    (coursesData || []).forEach((c: any) => { courseMap[c.id] = c.title; });
+    const enriched: Submission[] = subs
+      .map((s: any) => ({
+        ...s,
+        studentName: profileMap[s.user_id]?.full_name || 'Unknown',
+        studentEmail: profileMap[s.user_id]?.email || '',
+        lessonTitle: lessonMap[s.lesson_id]?.title || '',
+        courseTitle: courseMap[lessonMap[s.lesson_id]?.course_id] || '',
+      }))
+      .sort((a: Submission, b: Submission) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1));
+    setSubmissions(enriched);
+  };
+
+  const reviewSubmission = async (id: number, status: 'approved' | 'rejected') => {
+    setSavingReview(true);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { error } = await supabase.from('lesson_submissions').update({
+      status, feedback: reviewFeedback.trim() || null, reviewed_by: adminId, reviewed_at: new Date().toISOString(),
+    }).eq('id', id);
+    if (error) { showToast(`Error: ${error.message}`); setSavingReview(false); return; }
+    await loadSubmissions(supabase);
+    setReviewingId(null);
+    setReviewFeedback('');
+    setSavingReview(false);
+    showToast(status === 'approved' ? 'Submission approved.' : 'Submission rejected.');
   };
 
   const loadAnalytics = async (supabase: any) => {
@@ -458,6 +525,7 @@ export default function AdminPage() {
         video_url: editingLesson.video_url,
         order_index: editingLesson.order_index,
         is_published: editingLesson.is_published,
+        requires_review: editingLesson.requires_review,
       }).eq('id', editingLesson.id);
       if (error) { showToast(`Error: ${error.message}`); setSavingLesson(false); return; }
       showToast('Lesson updated!');
@@ -477,6 +545,7 @@ export default function AdminPage() {
         video_url: editingLesson.video_url,
         order_index: lessons.length + 1,
         is_published: editingLesson.is_published,
+        requires_review: editingLesson.requires_review,
       }).select().single();
       if (error) { showToast(`Error: ${error.message}`); setSavingLesson(false); return; }
       setEditingLesson(inserted);
@@ -556,6 +625,7 @@ export default function AdminPage() {
             {[
               { id: 'courses', label: 'Course Manager', icon: '◎' },
               { id: 'lessons', label: 'Lesson Builder', icon: '✦' },
+              { id: 'reviews', label: 'Reviews', icon: '☑' },
               { id: 'students', label: 'Students', icon: '⊞' },
               { id: 'analytics', label: 'Analytics', icon: '◈' },
               { id: 'tracks', label: 'Tracks', icon: '◑' },
@@ -758,6 +828,7 @@ export default function AdminPage() {
                         video_url: '',
                         order_index: lessons.length + 1,
                         is_published: false,
+                        requires_review: false,
                       });
                       setShowLessonForm(true);
                     }} style={{
@@ -1015,6 +1086,19 @@ export default function AdminPage() {
                           </div>
                         )}
 
+                        {/* MINI_PROJECT-only: language (grading only supports these three) */}
+                        {editingLesson.type === 'mini_project' && (
+                          <div>
+                            <label style={labelStyle}>Language (determines how tests are graded)</label>
+                            <select style={{ ...inputStyle, cursor: 'pointer' }} value={editingLesson.language || 'python'}
+                              onChange={e => setEditingLesson(p => p ? ({ ...p, language: e.target.value }) : p)}>
+                              <option value="python">Python</option>
+                              <option value="javascript">JavaScript</option>
+                              <option value="typescript">TypeScript</option>
+                            </select>
+                          </div>
+                        )}
+
                         {/* MINI_PROJECT / PROJECT type fields */}
                         {(editingLesson.type === 'mini_project' || editingLesson.type === 'project') && (
                           <div>
@@ -1096,6 +1180,28 @@ export default function AdminPage() {
                           </div>
                           <span style={{ fontSize: 13, color: '#6B7280' }}>
                             {editingLesson.is_published ? 'Published, visible to students' : 'Draft, not visible to students'}
+                          </span>
+                        </div>
+
+                        {/* Requires-review toggle */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div onClick={() => setEditingLesson(p => p ? ({ ...p, requires_review: !p.requires_review }) : p)}
+                            style={{
+                              width: 44, height: 24, borderRadius: 12, cursor: 'pointer',
+                              background: editingLesson.requires_review ? '#4E8FD4' : '#3A3F46',
+                              position: 'relative', transition: 'background 0.2s',
+                            }}>
+                            <div style={{
+                              width: 18, height: 18, borderRadius: '50%', background: 'white',
+                              position: 'absolute', top: 3,
+                              left: editingLesson.requires_review ? 23 : 3,
+                              transition: 'left 0.2s',
+                            }} />
+                          </div>
+                          <span style={{ fontSize: 13, color: '#6B7280' }}>
+                            {editingLesson.requires_review
+                              ? 'Requires admin review before completion'
+                              : 'Completes without review (self-marked, or auto-graded for quiz/mini project)'}
                           </span>
                         </div>
                       </div>
@@ -1199,6 +1305,72 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* REVIEWS */}
+          {activeTab === 'reviews' && (
+            <div>
+              <div style={{ marginBottom: '2rem' }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// reviews'}</div>
+                <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5', letterSpacing: '-0.02em' }}>Submission Reviews</h1>
+                <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
+                  {submissions.filter(s => s.status === 'pending').length} pending
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {submissions.map(s => (
+                  <div key={s.id} style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '16px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                          <span style={{ fontSize: 15, fontWeight: 600, color: '#F5F5F5' }}>{s.studentName}</span>
+                          <span style={{
+                            fontSize: 10, padding: '2px 8px', borderRadius: 20, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
+                            background: s.status === 'pending' ? 'rgba(213,156,16,0.1)' : s.status === 'approved' ? 'rgba(76,175,125,0.1)' : 'rgba(220,38,38,0.1)',
+                            color: s.status === 'pending' ? '#D59C10' : s.status === 'approved' ? '#4CAF7D' : '#F87171',
+                          }}>{s.status.toUpperCase()}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>{s.courseTitle} · {s.lessonTitle}</div>
+                        <div style={{ fontSize: 13, marginBottom: 4 }}>
+                          <a href={s.submission_url} target="_blank" rel="noreferrer" style={{ color: '#4E8FD4' }}>{s.submission_url}</a>
+                        </div>
+                        {s.note && <div style={{ fontSize: 13, color: '#6B7280' }}>{s.note}</div>}
+                      </div>
+                      {s.status === 'pending' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, minWidth: 220 }}>
+                          <textarea
+                            value={reviewingId === s.id ? reviewFeedback : ''}
+                            onChange={e => { setReviewingId(s.id); setReviewFeedback(e.target.value); }}
+                            placeholder="Feedback (optional)"
+                            rows={2}
+                            style={{ ...inputStyle, height: 'auto', padding: '8px 12px', resize: 'vertical' as const, fontSize: 13 }}
+                          />
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => reviewSubmission(s.id, 'approved')} disabled={savingReview} style={{
+                              flex: 1, background: 'rgba(76,175,125,0.1)', border: '1px solid rgba(76,175,125,0.3)', borderRadius: 20,
+                              padding: '6px 14px', fontSize: 12, color: '#4CAF7D', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                            }}>Approve</button>
+                            <button onClick={() => reviewSubmission(s.id, 'rejected')} disabled={savingReview} style={{
+                              flex: 1, background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 20,
+                              padding: '6px 14px', fontSize: 12, color: '#F87171', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                            }}>Reject</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {s.status !== 'pending' && s.feedback && (
+                      <div style={{ marginTop: 10, fontSize: 12, color: '#6B7280', borderTop: '1px solid #2A2F35', paddingTop: 10 }}>Feedback: {s.feedback}</div>
+                    )}
+                  </div>
+                ))}
+                {submissions.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '4rem 0', color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
+                    {'// no submissions yet.'}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

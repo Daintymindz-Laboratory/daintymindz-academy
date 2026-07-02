@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import { createRunnerWorker, runTestCases, type Language } from '@/lib/codeRunner';
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -25,22 +26,24 @@ interface Props {
   trackColor: string;
   starterCode: string;
   instructions: string;
+  language?: string;
   isCompleted: boolean;
   onComplete: () => void;
 }
 
 export default function MiniProjectLesson({
-  lessonId, userId, trackColor, starterCode, instructions, isCompleted, onComplete,
+  lessonId, userId, trackColor, starterCode, instructions, language = 'python', isCompleted, onComplete,
 }: Props) {
   const storageKey = `dm_mp_code_${lessonId}`;
+  const defaultSnippet = language === 'python' ? '# Write your solution here\n' : '// Write your solution here\n';
 
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [code, setCode] = useState(() => {
-    try { return localStorage.getItem(storageKey) || starterCode || '# Write your solution here\n'; } catch { return starterCode || '# Write your solution here\n'; }
+    try { return localStorage.getItem(storageKey) || starterCode || defaultSnippet; } catch { return starterCode || defaultSnippet; }
   });
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<TestResult[]>([]);
-  const [pyodideReady, setPyodideReady] = useState(false);
+  const [runnerReady, setRunnerReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const runIdRef = useRef(0);
@@ -67,163 +70,24 @@ export default function MiniProjectLesson({
     };
     load();
 
-    // Inline the worker as a Blob so it is bundled with the component JS
-    // and never served from a stale CDN/browser cache.
-    const workerSrc = `
-let pyodide = null;
-self.importScripts('https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js');
-async function init() {
-  pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/' });
-  pyodide.runPython('import sys, io; _orig_stdout = sys.stdout');
-  self.postMessage({ type: 'ready' });
-}
-self.onmessage = async (e) => {
-  const { type, code, runId } = e.data;
-  if (type !== 'run') return;
-  if (!pyodide) { self.postMessage({ type: 'error', error: 'Pyodide not loaded yet.', runId }); return; }
-  try {
-    try { await pyodide.loadPackagesFromImports(code); } catch (_) {}
-    pyodide.globals.set('_code', code);
-    const out = await pyodide.runPythonAsync(\`
-_buf = io.StringIO()
-sys.stdout = _buf
-try:
-    exec(compile(_code, '<student>', 'exec'), {'__builtins__': __builtins__})
-finally:
-    sys.stdout = _orig_stdout
-_buf.getvalue()
-\`);
-    self.postMessage({ type: 'output', output: out || '(no output)', runId });
-  } catch (err) {
-    try { pyodide.runPython('sys.stdout = _orig_stdout'); } catch (_) {}
-    self.postMessage({ type: 'error', error: String(err.message || err), runId });
-  }
-};
-init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Python runtime: ' + err.message }));
-`;
-    const blob = new Blob([workerSrc], { type: 'application/javascript' });
-    const workerUrl = URL.createObjectURL(blob);
-    const worker = new Worker(workerUrl);
+    const worker = createRunnerWorker(language as Language);
     workerRef.current = worker;
     worker.onmessage = (e) => {
-      if (e.data.type === 'ready') setPyodideReady(true);
+      if (e.data.type === 'ready') setRunnerReady(true);
     };
     return () => {
       worker.terminate();
       workerRef.current = null;
     };
-  }, [lessonId]);
+  }, [lessonId, language]);
 
   const runTests = async () => {
-    if (!workerRef.current || !pyodideReady || running) return;
+    if (!workerRef.current || !runnerReady || running) return;
     setRunning(true);
-    const allResults: TestResult[] = [];
 
-    for (const tc of testCases) {
-      // Normalize output before comparing:
-      // - " / " is used by admins as a newline separator
-      // - Python uses single quotes in repr/tuple output; expected often has double quotes
-      const normalizeOutput = (s: string) =>
-        s.trim().replace(/ \/ /g, '\n').replace(/'/g, '"');
-
-      // Replace a (potentially multi-line) variable assignment in student code.
-      // Tracks bracket depth so it handles `var = [\n  ...\n]` correctly.
-      const replaceAssignment = (src: string, varName: string, newValue: string): string => {
-        const lines = src.split('\n');
-        const start = lines.findIndex(l => new RegExp(`^\\s*${varName}\\s*=`).test(l));
-        if (start === -1) return src;
-        let depth = 0;
-        let end = start;
-        for (let i = start; i < lines.length; i++) {
-          for (const ch of lines[i]) {
-            if ('([{'.includes(ch)) depth++;
-            if (')]}'.includes(ch)) depth--;
-          }
-          if (i > start && depth <= 0) { end = i; break; }
-          if (i === start && depth === 0) { end = i; break; }
-        }
-        return [...lines.slice(0, start), `${varName} = ${newValue}`, ...lines.slice(end + 1)].join('\n');
-      };
-
-      // Determine how to drive this test case from its description.
-      //
-      // Case A - data literal: description starts with [ or { (a list or dict
-      //   value). Find the first top-level list/dict assignment in student code
-      //   and replace the whole block with the test value.
-      //
-      // Case B - function call: description is "funcname(args)". Strip the
-      //   student's own top-level calls to that function and append this call.
-      //
-      // Case C - variable assignments: "celsius = 0, miles = 5". Substitute
-      //   matching lines in student code in-place.
-      const desc = tc.description.trim();
-      const isDataLiteral = /^[\[{]/.test(desc);
-      const isFunctionCall = !isDataLiteral && /^[A-Za-z_]\w*\s*\(/.test(desc);
-
-      let fullCode: string;
-
-      if (isDataLiteral) {
-        // Find the first variable assigned a list/dict at the top level.
-        const assignLine = code.split('\n').find(l => /^[A-Za-z_]\w*\s*=\s*[\[{]/.test(l.trim()));
-        const varName = assignLine?.match(/^([A-Za-z_]\w*)\s*=/)?.[1];
-        fullCode = varName ? replaceAssignment(code, varName, desc) : code;
-      } else if (isFunctionCall) {
-        const funcName = desc.match(/^([A-Za-z_]\w*)\s*\(/)?.[1] ?? '';
-        // If the student wraps the call in print(), the function returns a
-        // value and we must also wrap the test call. If they call it directly
-        // the function prints on its own.
-        const printWrapped = code.includes(`print(${funcName}(`);
-        const callToAppend = printWrapped ? `print(${desc})` : desc;
-        const studentLines = code.split('\n').filter(l => {
-          const trimmed = l.trim();
-          if (!trimmed || trimmed.startsWith('def ') || trimmed.startsWith('class ')) return true;
-          // Strip any top-level line (no leading whitespace) that references the function.
-          const isTopLevel = l.length > 0 && l[0] !== ' ' && l[0] !== '\t';
-          return !(isTopLevel && trimmed.includes(`${funcName}(`));
-        });
-        fullCode = [...studentLines, '', callToAppend].join('\n');
-      } else {
-        const overrides: Record<string, string> = {};
-        for (const part of desc.split(',')) {
-          const m = part.trim().match(/^([A-Za-z_]\w*)\s*=\s*(.+)$/);
-          if (m) overrides[m[1]] = `${m[1]} = ${m[2].trim()}`;
-        }
-        const injected = new Set<string>();
-        const studentLines = code.split('\n').map(line => {
-          const m = line.match(/^([A-Za-z_]\w*)\s*=/);
-          if (m && overrides[m[1]]) { injected.add(m[1]); return overrides[m[1]]; }
-          return line;
-        });
-        const prefix = Object.entries(overrides).filter(([k]) => !injected.has(k)).map(([, v]) => v);
-        fullCode = [...prefix, ...studentLines].join('\n');
-      }
-
-      const id = ++runIdRef.current;
-
-      const result = await new Promise<TestResult>((resolve) => {
-        const timeoutId = setTimeout(() => {
-          resolve({ id: tc.id, passed: false, actual: '', error: 'Timed out after 10s' });
-        }, 10000);
-
-        const handleMsg = (e: MessageEvent) => {
-          if (e.data.runId !== id) return;
-          clearTimeout(timeoutId);
-          workerRef.current?.removeEventListener('message', handleMsg);
-          if (e.data.type === 'output') {
-            const actual = normalizeOutput(e.data.output);
-            const expected = normalizeOutput(tc.expected_output);
-            resolve({ id: tc.id, passed: actual === expected, actual });
-          } else {
-            resolve({ id: tc.id, passed: false, actual: '', error: e.data.error });
-          }
-        };
-
-        workerRef.current!.addEventListener('message', handleMsg);
-        workerRef.current!.postMessage({ type: 'run', code: fullCode, runId: id });
-      });
-
-      allResults.push(result);
-    }
+    const allResults = await runTestCases(
+      workerRef.current, testCases, code, language as Language, () => ++runIdRef.current,
+    );
 
     setResults(allResults);
     setRunning(false);
@@ -349,26 +213,26 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
               <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#3A3F46' }} />
             </div>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#6B7280', marginLeft: 8 }}>
-              solution.py
+              solution.{language === 'javascript' ? 'js' : language === 'typescript' ? 'ts' : 'py'}
             </span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setCode(starterCode || '# Write your solution here\n')} style={{
+            <button onClick={() => setCode(starterCode || defaultSnippet)} style={{
               background: 'transparent', border: '1px solid #2A2F35', borderRadius: 20,
               padding: '4px 14px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
               color: '#6B7280', cursor: 'pointer',
             }}>Reset</button>
             <button
               onClick={runTests}
-              disabled={running || !pyodideReady || testCases.length === 0}
+              disabled={running || !runnerReady || testCases.length === 0}
               style={{
                 padding: '5px 20px', borderRadius: 50, fontWeight: 700, fontSize: 13,
                 fontFamily: 'DM Sans, sans-serif', border: 'none',
                 background: running ? '#22262B' : allPassed ? 'rgba(76,175,125,0.15)' : trackColor,
                 color: running ? '#6B7280' : allPassed ? '#4CAF7D' : '#1A1D21',
-                cursor: running || !pyodideReady ? 'not-allowed' : 'pointer',
+                cursor: running || !runnerReady ? 'not-allowed' : 'pointer',
               }}>
-              {running ? 'Running Tests...' : !pyodideReady ? 'Loading Python...' : allPassed ? 'All Tests Pass' : 'Run Tests'}
+              {running ? 'Running Tests...' : !runnerReady ? 'Loading runtime...' : allPassed ? 'All Tests Pass' : 'Run Tests'}
             </button>
           </div>
         </div>
@@ -376,7 +240,7 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <Editor
             height="100%"
-            language="python"
+            language={language || 'python'}
             value={code}
             onChange={val => setCode(val || '')}
             theme="vs-dark"

@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import ReactMarkdown from 'react-markdown';
+import { createRunnerWorker, runOneTest, runTestCases, type Language } from '@/lib/codeRunner';
+import LessonSubmission from '@/components/LessonSubmission';
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -29,29 +31,30 @@ interface Props {
   codeLabel: string;
   embedUrl: string | null;
   isCompleted: boolean;
+  requiresReview: boolean;
   onComplete: () => void;
 }
 
 export default function ProjectLesson({
   lessonId, userId, trackColor, starterCode, instructions,
-  language, codeLabel, embedUrl, isCompleted, onComplete,
+  language, codeLabel, embedUrl, isCompleted, requiresReview, onComplete,
 }: Props) {
   const storageKey = `dm_proj_code_${lessonId}`;
+  const defaultSnippet = language === 'python' ? '# Write your solution here\n' : '// Write your solution here\n';
 
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [code, setCode] = useState(() => {
-    try { return localStorage.getItem(storageKey) || starterCode || '# Write your solution here\n'; } catch { return starterCode || '# Write your solution here\n'; }
+    try { return localStorage.getItem(storageKey) || starterCode || defaultSnippet; } catch { return starterCode || defaultSnippet; }
   });
   const [activeTab, setActiveTab] = useState<'instructions' | 'output'>('instructions');
   const [output, setOutput] = useState('');
   const [running, setRunning] = useState(false);
   const [testRunning, setTestRunning] = useState(false);
   const [results, setResults] = useState<TestResult[]>([]);
-  const [pyodideReady, setPyodideReady] = useState(false);
+  const [runnerReady, setRunnerReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const runIdRef = useRef(0);
-  const runTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     try { localStorage.setItem(storageKey, code); } catch { /* ignore */ }
@@ -73,154 +76,31 @@ export default function ProjectLesson({
     };
     load();
 
-    const workerSrc = `
-let pyodide = null;
-self.importScripts('https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js');
-async function init() {
-  pyodide = await loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/' });
-  pyodide.runPython('import sys, io; _orig_stdout = sys.stdout');
-  self.postMessage({ type: 'ready' });
-}
-self.onmessage = async (e) => {
-  const { type, code, runId } = e.data;
-  if (type !== 'run') return;
-  if (!pyodide) { self.postMessage({ type: 'error', error: 'Pyodide not loaded yet.', runId }); return; }
-  try {
-    try { await pyodide.loadPackagesFromImports(code); } catch (_) {}
-    pyodide.globals.set('_code', code);
-    const out = await pyodide.runPythonAsync(\`
-_buf = io.StringIO()
-sys.stdout = _buf
-try:
-    exec(compile(_code, '<student>', 'exec'), {'__builtins__': __builtins__})
-finally:
-    sys.stdout = _orig_stdout
-_buf.getvalue()
-\`);
-    self.postMessage({ type: 'output', output: out || '(no output)', runId });
-  } catch (err) {
-    try { pyodide.runPython('sys.stdout = _orig_stdout'); } catch (_) {}
-    self.postMessage({ type: 'error', error: String(err.message || err), runId });
-  }
-};
-init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Python runtime: ' + err.message }));
-`;
-    const blob = new Blob([workerSrc], { type: 'application/javascript' });
-    const worker = new Worker(URL.createObjectURL(blob));
+    const worker = createRunnerWorker(language as Language);
     workerRef.current = worker;
-    worker.onmessage = (e) => { if (e.data.type === 'ready') setPyodideReady(true); };
+    worker.onmessage = (e) => { if (e.data.type === 'ready') setRunnerReady(true); };
     return () => { worker.terminate(); workerRef.current = null; };
-  }, [lessonId]);
+  }, [lessonId, language]);
 
-  const runCode = () => {
-    if (!workerRef.current || !pyodideReady) return;
+  const runCode = async () => {
+    if (!workerRef.current || !runnerReady) return;
     setRunning(true);
     setActiveTab('output');
     setOutput('Running...\n');
-    if (runTimeoutRef.current) clearTimeout(runTimeoutRef.current);
     const id = ++runIdRef.current;
-    const handleMsg = (e: MessageEvent) => {
-      if (e.data.runId !== id) return;
-      workerRef.current?.removeEventListener('message', handleMsg);
-      if (runTimeoutRef.current) clearTimeout(runTimeoutRef.current);
-      if (e.data.type === 'output') setOutput(e.data.output);
-      else setOutput(`Error:\n${e.data.error}`);
-      setRunning(false);
-    };
-    runTimeoutRef.current = setTimeout(() => {
-      workerRef.current?.removeEventListener('message', handleMsg);
-      setOutput('Error:\nExecution timed out after 10 seconds.');
-      setRunning(false);
-    }, 10000);
-    workerRef.current.addEventListener('message', handleMsg);
-    workerRef.current.postMessage({ type: 'run', code, runId: id });
+    const { output, error } = await runOneTest(workerRef.current, code, id);
+    setOutput(error ? `Error:\n${error}` : (output || '(no output)'));
+    setRunning(false);
   };
 
   const runTests = async () => {
-    if (!workerRef.current || !pyodideReady || testRunning) return;
+    if (!workerRef.current || !runnerReady || testRunning) return;
     setTestRunning(true);
     setActiveTab('instructions');
-    const allResults: TestResult[] = [];
 
-    const normalizeOutput = (s: string) =>
-      s.trim().replace(/ \/ /g, '\n').replace(/'/g, '"');
-
-    const replaceAssignment = (src: string, varName: string, newValue: string): string => {
-      const lines = src.split('\n');
-      const start = lines.findIndex(l => new RegExp(`^\\s*${varName}\\s*=`).test(l));
-      if (start === -1) return src;
-      let depth = 0, end = start;
-      for (let i = start; i < lines.length; i++) {
-        for (const ch of lines[i]) {
-          if ('([{'.includes(ch)) depth++;
-          if (')]}'.includes(ch)) depth--;
-        }
-        if (i > start && depth <= 0) { end = i; break; }
-        if (i === start && depth === 0) { end = i; break; }
-      }
-      return [...lines.slice(0, start), `${varName} = ${newValue}`, ...lines.slice(end + 1)].join('\n');
-    };
-
-    for (const tc of testCases) {
-      const desc = tc.description.trim();
-      const isDataLiteral = /^[\[{]/.test(desc);
-      const isFunctionCall = !isDataLiteral && /^[A-Za-z_]\w*\s*\(/.test(desc);
-
-      let fullCode: string;
-
-      if (isDataLiteral) {
-        const assignLine = code.split('\n').find(l => /^[A-Za-z_]\w*\s*=\s*[\[{]/.test(l.trim()));
-        const varName = assignLine?.match(/^([A-Za-z_]\w*)\s*=/)?.[1];
-        fullCode = varName ? replaceAssignment(code, varName, desc) : code;
-      } else if (isFunctionCall) {
-        const funcName = desc.match(/^([A-Za-z_]\w*)\s*\(/)?.[1] ?? '';
-        const printWrapped = code.includes(`print(${funcName}(`);
-        const callToAppend = printWrapped ? `print(${desc})` : desc;
-        const studentLines = code.split('\n').filter(l => {
-          const trimmed = l.trim();
-          if (!trimmed || trimmed.startsWith('def ') || trimmed.startsWith('class ')) return true;
-          const isTopLevel = l.length > 0 && l[0] !== ' ' && l[0] !== '\t';
-          return !(isTopLevel && trimmed.includes(`${funcName}(`));
-        });
-        fullCode = [...studentLines, '', callToAppend].join('\n');
-      } else {
-        const overrides: Record<string, string> = {};
-        for (const part of desc.split(',')) {
-          const m = part.trim().match(/^([A-Za-z_]\w*)\s*=\s*(.+)$/);
-          if (m) overrides[m[1]] = `${m[1]} = ${m[2].trim()}`;
-        }
-        const injected = new Set<string>();
-        const studentLines = code.split('\n').map(line => {
-          const m = line.match(/^([A-Za-z_]\w*)\s*=/);
-          if (m && overrides[m[1]]) { injected.add(m[1]); return overrides[m[1]]; }
-          return line;
-        });
-        const prefix = Object.entries(overrides).filter(([k]) => !injected.has(k)).map(([, v]) => v);
-        fullCode = [...prefix, ...studentLines].join('\n');
-      }
-
-      const id = ++runIdRef.current;
-      const result = await new Promise<TestResult>((resolve) => {
-        const timeoutId = setTimeout(() => {
-          resolve({ id: tc.id, passed: false, actual: '', error: 'Timed out after 10s' });
-        }, 10000);
-        const handleMsg = (e: MessageEvent) => {
-          if (e.data.runId !== id) return;
-          clearTimeout(timeoutId);
-          workerRef.current?.removeEventListener('message', handleMsg);
-          if (e.data.type === 'output') {
-            const actual = normalizeOutput(e.data.output);
-            const expected = normalizeOutput(tc.expected_output);
-            resolve({ id: tc.id, passed: actual === expected, actual });
-          } else {
-            resolve({ id: tc.id, passed: false, actual: '', error: e.data.error });
-          }
-        };
-        workerRef.current!.addEventListener('message', handleMsg);
-        workerRef.current!.postMessage({ type: 'run', code: fullCode, runId: id });
-      });
-      allResults.push(result);
-    }
+    const allResults = await runTestCases(
+      workerRef.current, testCases, code, language as Language, () => ++runIdRef.current,
+    );
 
     setResults(allResults);
     setTestRunning(false);
@@ -351,6 +231,17 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
                   </div>
                 </>
               )}
+
+              {!hasTests && requiresReview && (
+                <LessonSubmission
+                  key={lessonId}
+                  lessonId={lessonId}
+                  userId={userId}
+                  trackColor={trackColor}
+                  isCompleted={isCompleted}
+                  onComplete={onComplete}
+                />
+              )}
             </>
           )}
         </div>
@@ -370,13 +261,17 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{language || 'python'}</span>
             <button onClick={() => setCode(starterCode || '')} style={{ background: 'transparent', border: '1px solid #2A2F35', borderRadius: 20, padding: '4px 12px', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#6B7280', cursor: 'pointer' }}>Reset</button>
-            <button onClick={runCode} disabled={running || testRunning || !pyodideReady} style={{ padding: '5px 16px', borderRadius: 50, fontWeight: 600, fontSize: 13, fontFamily: 'DM Sans, sans-serif', border: '1px solid #3A3F46', background: 'transparent', color: running || !pyodideReady ? '#6B7280' : '#F5F5F5', cursor: running || !pyodideReady ? 'not-allowed' : 'pointer' }}>
-              {running ? 'Running...' : !pyodideReady ? 'Loading...' : 'Run Code'}
+            <button onClick={runCode} disabled={running || testRunning || !runnerReady} style={{ padding: '5px 16px', borderRadius: 50, fontWeight: 600, fontSize: 13, fontFamily: 'DM Sans, sans-serif', border: '1px solid #3A3F46', background: 'transparent', color: running || !runnerReady ? '#6B7280' : '#F5F5F5', cursor: running || !runnerReady ? 'not-allowed' : 'pointer' }}>
+              {running ? 'Running...' : !runnerReady ? 'Loading...' : 'Run Code'}
             </button>
             {hasTests ? (
-              <button onClick={runTests} disabled={testRunning || running || !pyodideReady} style={{ padding: '5px 20px', borderRadius: 50, fontWeight: 700, fontSize: 13, fontFamily: 'DM Sans, sans-serif', border: 'none', background: testRunning ? '#22262B' : allPassed ? 'rgba(76,175,125,0.15)' : trackColor, color: testRunning ? '#6B7280' : allPassed ? '#4CAF7D' : '#1A1D21', cursor: testRunning || !pyodideReady ? 'not-allowed' : 'pointer' }}>
+              <button onClick={runTests} disabled={testRunning || running || !runnerReady} style={{ padding: '5px 20px', borderRadius: 50, fontWeight: 700, fontSize: 13, fontFamily: 'DM Sans, sans-serif', border: 'none', background: testRunning ? '#22262B' : allPassed ? 'rgba(76,175,125,0.15)' : trackColor, color: testRunning ? '#6B7280' : allPassed ? '#4CAF7D' : '#1A1D21', cursor: testRunning || !runnerReady ? 'not-allowed' : 'pointer' }}>
                 {testRunning ? 'Running Tests...' : allPassed ? 'All Tests Pass' : 'Run Tests'}
               </button>
+            ) : requiresReview ? (
+              <span style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: isCompleted ? '#4CAF7D' : '#6B7280' }}>
+                {isCompleted ? 'Approved' : 'See submission panel'}
+              </span>
             ) : (
               <button onClick={onComplete} style={{ padding: '5px 20px', borderRadius: 50, fontWeight: 700, fontSize: 13, fontFamily: 'DM Sans, sans-serif', border: isCompleted ? '1px solid rgba(76,175,125,0.3)' : 'none', background: isCompleted ? 'rgba(76,175,125,0.1)' : trackColor, color: isCompleted ? '#4CAF7D' : '#1A1D21', cursor: 'pointer' }}>
                 {isCompleted ? 'Completed' : 'Mark Complete'}
