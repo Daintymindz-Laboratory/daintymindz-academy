@@ -204,7 +204,7 @@ export default function Dashboard() {
         if (lastActive !== today) {
           const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
           streak = lastActive === yesterday ? streak + 1 : 1;
-          supabase.from('profiles').update({ streak, last_active_date: today }).eq('id', authUser.id);
+          await supabase.from('profiles').update({ streak, last_active_date: today }).eq('id', authUser.id);
         }
         setUser({
           name: profile.full_name || authUser.email || 'Student',
