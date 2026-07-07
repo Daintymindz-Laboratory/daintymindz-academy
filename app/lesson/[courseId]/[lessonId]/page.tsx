@@ -249,7 +249,10 @@ export default function LessonPage() {
         <button onClick={() => { if (window.innerWidth < 769) setSidebarOpen(o => !o); else toggleCollapse(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 18, padding: 4 }}>☰</button>
         <a href="/my-courses" style={{ textDecoration: 'none' }}><Image src="/logo.png" alt="Daintymindz" width={88} height={32} style={{ objectFit: 'contain' }} /></a>
         <span style={{ color: '#3A3F46', fontSize: 12 }}>›</span>
-        <span style={{ fontSize: 13, color: '#6B7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{course?.title}</span>
+        <a href="/my-courses" style={{ fontSize: 13, color: '#6B7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#F5F5F5')}
+          onMouseLeave={e => (e.currentTarget.style.color = '#6B7280')}
+        >{course?.title}</a>
         <span style={{ color: '#3A3F46', fontSize: 12 }}>›</span>
         <span style={{ fontSize: 13, color: '#F5F5F5', fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{currentLesson.title}</span>
         <div style={{ flex: 1 }} />
