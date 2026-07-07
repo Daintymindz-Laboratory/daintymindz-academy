@@ -482,7 +482,13 @@ export default function AdminPage() {
       setEditingLesson(inserted);
       await loadLessons(selectedCourse.id!);
       setSavingLesson(false);
-      showToast('Lesson created! Now add your questions below.');
+      if (inserted.type === 'quiz') {
+        showToast('Lesson created! Now add your questions below.');
+      } else if (inserted.type === 'mini_project' || inserted.type === 'project') {
+        showToast('Lesson created! Now add your test cases below.');
+      } else {
+        showToast('Lesson created!');
+      }
     }
   };
 
