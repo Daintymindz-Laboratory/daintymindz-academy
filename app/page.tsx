@@ -5,11 +5,14 @@ import { useEffect, useRef, useState } from 'react';
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [courseCounts, setCourseCounts] = useState<Record<string, number>>({ AI: 0, DA: 0, SE: 0, DO: 0, total: 0 });
+  const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
     const loadCounts = async () => {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setLoggedIn(true);
       const { data } = await supabase.from('courses').select('track');
       if (!data) return;
       const counts: Record<string, number> = { AI: 0, DA: 0, SE: 0, DO: 0, total: data.length };
@@ -160,17 +163,26 @@ export default function Home() {
             Main site
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </a>
-          <button style={{
-            background: 'transparent', border: '1px solid #3A3F46',
-            color: '#F5F5F5', padding: '9px 22px', fontSize: 14, fontWeight: 500,
-            cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-            borderRadius: 50,
-          }} onClick={() => window.location.href='/signin'}>Sign in</button>
-          <button style={{
-            background: '#D59C10', border: 'none',
-            color: '#1A1D21', padding: '9px 22px', fontSize: 14, fontWeight: 700,
-            cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', borderRadius: 50,
-          }} onClick={() => window.location.href='/signup'}>Get started</button>
+          {loggedIn ? (
+            <button style={{
+              background: '#D59C10', border: 'none',
+              color: '#1A1D21', padding: '9px 22px', fontSize: 14, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', borderRadius: 50,
+            }} onClick={() => window.location.href='/dashboard'}>Go to Dashboard</button>
+          ) : (
+            <>
+              <button style={{
+                background: 'transparent', border: '1px solid #3A3F46',
+                color: '#F5F5F5', padding: '9px 22px', fontSize: 14, fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', borderRadius: 50,
+              }} onClick={() => window.location.href='/signin'}>Sign in</button>
+              <button style={{
+                background: '#D59C10', border: 'none',
+                color: '#1A1D21', padding: '9px 22px', fontSize: 14, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', borderRadius: 50,
+              }} onClick={() => window.location.href='/signup'}>Get started</button>
+            </>
+          )}
         </div>
       </nav>
 
@@ -214,7 +226,9 @@ export default function Home() {
               color: '#1A1D21', padding: '13px 30px',
               fontSize: 15, fontWeight: 700, cursor: 'pointer',
               fontFamily: 'DM Sans, sans-serif', borderRadius: 50,
-            }} onClick={() => window.location.href='/signup'}>Start learning</button>
+            }} onClick={() => window.location.href = loggedIn ? '/dashboard' : '/signup'}>
+              {loggedIn ? 'Go to Dashboard' : 'Start learning'}
+            </button>
             <button style={{
               background: 'transparent', border: '1px solid #3A3F46',
               color: '#F5F5F5', padding: '13px 30px',
