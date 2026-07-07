@@ -55,6 +55,17 @@ export default function Catalog() {
     }
   }, [ctxUser]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('dm-sidebar-collapsed') === '1';
+    return false;
+  });
+  const toggleCollapse = () => {
+    setSidebarCollapsed(c => {
+      const next = !c;
+      localStorage.setItem('dm-sidebar-collapsed', next ? '1' : '0');
+      return next;
+    });
+  };
 
   useEffect(() => {
     const init = async () => {
@@ -135,7 +146,7 @@ export default function Catalog() {
         padding: '0 1.5rem', gap: 16,
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
       }}>
-        <button onClick={() => setSidebarOpen(o => !o)} style={{
+        <button onClick={() => { if (window.innerWidth < 769) setSidebarOpen(o => !o); else toggleCollapse(); }} style={{
           background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 20, padding: 4,
         }}>☰</button>
         <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
@@ -168,7 +179,7 @@ export default function Catalog() {
         {/* Mobile backdrop */}
         <div className={`dm-sidebar-backdrop${sidebarOpen ? ' open' : ''}`} onClick={() => setSidebarOpen(false)} />
         {/* SIDEBAR */}
-        <aside className={`dm-sidebar${sidebarOpen ? ' open' : ''}`} style={{ padding: '1.5rem 0' }}>
+        <aside className={`dm-sidebar${sidebarOpen ? ' open' : ''}${sidebarCollapsed ? ' dm-collapsed' : ''}`} style={{ padding: '1.5rem 0' }}>
           <div style={{ padding: '0 1rem', marginBottom: '1.5rem' }}>
             <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>Navigation</div>
             {[...BASE_NAV_ITEMS, ...(isAdmin ? [{ icon: '⚙', label: 'Admin Panel', href: '/admin', active: false }] : [])].map(item => (
@@ -222,7 +233,7 @@ export default function Catalog() {
         </aside>
 
         {/* MAIN */}
-        <main className="dm-main" style={{ flex: 1, marginLeft: 240, padding: '2.5rem', overflowY: 'auto' }}>
+        <main className={`dm-main${sidebarCollapsed ? ' dm-collapsed' : ''}`} style={{ flex: 1, padding: '2.5rem', overflowY: 'auto' }}>
 
           <div style={{ marginBottom: '2rem' }}>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 8 }}>
