@@ -66,6 +66,17 @@ export default function LessonPage() {
   const [userId, setUserId] = useState('');
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('dm-sidebar-collapsed') === '1';
+    return false;
+  });
+  const toggleCollapse = () => {
+    setSidebarCollapsed(c => {
+      const next = !c;
+      localStorage.setItem('dm-sidebar-collapsed', next ? '1' : '0');
+      return next;
+    });
+  };
   const [copied, setCopied] = useState(false);
 
   const [notesOpen, setNotesOpen] = useState(false);
@@ -235,7 +246,7 @@ export default function LessonPage() {
   return (
     <div style={{ background: '#1A1D21', height: '100vh', fontFamily: 'DM Sans, sans-serif', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <nav style={{ height: 56, background: '#1A1D21', borderBottom: '1px solid #2A2F35', display: 'flex', alignItems: 'center', padding: '0 1.25rem', gap: 12, flexShrink: 0, zIndex: 50 }}>
-        <button onClick={() => setSidebarOpen(o => !o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 18, padding: 4 }}>☰</button>
+        <button onClick={() => { if (window.innerWidth < 769) setSidebarOpen(o => !o); else toggleCollapse(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 18, padding: 4 }}>☰</button>
         <a href="/my-courses" style={{ textDecoration: 'none' }}><Image src="/logo.png" alt="Daintymindz" width={88} height={32} style={{ objectFit: 'contain' }} /></a>
         <span style={{ color: '#3A3F46', fontSize: 12 }}>›</span>
         <span style={{ fontSize: 13, color: '#6B7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{course?.title}</span>
@@ -257,7 +268,7 @@ export default function LessonPage() {
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <div className={`dm-sidebar-backdrop${sidebarOpen ? ' open' : ''}`} onClick={() => setSidebarOpen(false)} />
-        <aside className={`dm-lesson-sidebar${sidebarOpen ? ' open' : ''}`}>
+        <aside className={`dm-lesson-sidebar${sidebarOpen ? ' open' : ''}${sidebarCollapsed ? ' dm-collapsed' : ''}`}>
           <div style={{ padding: '1.25rem 1rem 0.75rem', borderBottom: '1px solid #2A2F35' }}>
             <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 6 }}>Course content</div>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5', lineHeight: 1.3 }}>{course?.title}</div>
