@@ -277,7 +277,7 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: trackColor, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 10 }}>Project</div>
               </div>
 
-              {(allPassed || isCompleted) && (
+              {allPassed && (
                 <div style={{ padding: '12px 16px', borderRadius: 12, marginBottom: 16, background: 'rgba(76,175,125,0.08)', border: '1px solid rgba(76,175,125,0.3)', display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 18 }}>&#10003;</span>
                   <div>
