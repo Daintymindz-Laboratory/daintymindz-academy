@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 
 interface QuizQuestion {
   id: number;
@@ -16,11 +17,12 @@ interface Props {
   lessonId: number;
   userId: string;
   trackColor: string;
+  introduction: string;
   isCompleted: boolean;
   onComplete: () => void;
 }
 
-export default function QuizLesson({ lessonId, userId, trackColor, isCompleted, onComplete }: Props) {
+export default function QuizLesson({ lessonId, userId, trackColor, introduction, isCompleted, onComplete }: Props) {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [answers, setAnswers] = useState<Record<number, string>>({});
@@ -105,6 +107,17 @@ export default function QuizLesson({ lessonId, userId, trackColor, isCompleted, 
         <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.6 }}>
           Answer all {questions.length} questions. You need 80% or higher to pass.
         </p>
+        {introduction && (
+          <div style={{ fontSize: 15, color: '#9CA3AF', lineHeight: 1.8, marginTop: 16 }}>
+            <ReactMarkdown components={{
+              p: ({ children }) => <p style={{ marginBottom: '0.75rem', color: '#9CA3AF' }}>{children}</p>,
+              strong: ({ children }) => <strong style={{ color: '#F5F5F5' }}>{children}</strong>,
+              ul: ({ children }) => <ul style={{ paddingLeft: '1.5rem', marginBottom: '0.75rem' }}>{children}</ul>,
+              li: ({ children }) => <li style={{ marginBottom: '0.3rem', color: '#9CA3AF' }}>{children}</li>,
+              code: ({ children }) => <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13, background: '#22262B', padding: '2px 6px', borderRadius: 4, color: '#E5E7EB' }}>{children}</code>,
+            }}>{introduction}</ReactMarkdown>
+          </div>
+        )}
       </div>
 
       {submitted && (
