@@ -143,7 +143,7 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
     const allResults: TestResult[] = [];
 
     const normalizeOutput = (s: string) =>
-      s.trim().replace(/ \/ /g, '\n').replace(/'/g, '"');
+      s.trim().replace(/ then /g, '\n').replace(/ \/ /g, '\n').replace(/'/g, '"');
 
     const replaceAssignment = (src: string, varName: string, newValue: string): string => {
       const lines = src.split('\n');

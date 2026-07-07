@@ -124,7 +124,7 @@ init().catch(err => self.postMessage({ type: 'error', error: 'Failed to load Pyt
       // - " / " is used by admins as a newline separator
       // - Python uses single quotes in repr/tuple output; expected often has double quotes
       const normalizeOutput = (s: string) =>
-        s.trim().replace(/ \/ /g, '\n').replace(/'/g, '"');
+        s.trim().replace(/ then /g, '\n').replace(/ \/ /g, '\n').replace(/'/g, '"');
 
       // Replace a (potentially multi-line) variable assignment in student code.
       // Tracks bracket depth so it handles `var = [\n  ...\n]` correctly.
