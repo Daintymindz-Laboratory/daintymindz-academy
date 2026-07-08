@@ -333,7 +333,7 @@ export default function Dashboard() {
           borderRadius: 50, padding: '6px 14px',
         }}>
           <span style={{ fontSize: 14 }}>🔥</span>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#D59C10' }}>{user.streak} day streak</span>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#D59C10' }}>{user.streak} {user.streak === 1 ? 'day' : 'days'} streak</span>
         </div>
 
         {/* Avatar */}
