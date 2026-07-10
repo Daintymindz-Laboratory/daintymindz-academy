@@ -2,6 +2,7 @@
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import { FALLBACK_TRACKS as BASE_FALLBACK_TRACKS } from '@/lib/user-context';
 
 const MDEditor = dynamic(() => import('@uiw/react-md-editor'), { ssr: false });
 
@@ -40,12 +41,9 @@ type Lesson = {
   is_published: boolean;
 };
 
-const FALLBACK_TRACKS: Record<string, { label: string; color: string }> = {
-  AI: { label: 'Artificial Intelligence', color: '#D59C10' },
-  DA: { label: 'Data Analytics', color: '#4E8FD4' },
-  SE: { label: 'Software Engineering', color: '#4CAF7D' },
-  DO: { label: 'Data Operations', color: '#9B6FD4' },
-};
+const FALLBACK_TRACKS: Record<string, { label: string; color: string }> = Object.fromEntries(
+  Object.entries(BASE_FALLBACK_TRACKS).map(([k, v]) => [k, { label: v.label, color: v.color }])
+);
 
 type Track = { code: string; label: string; color: string };
 

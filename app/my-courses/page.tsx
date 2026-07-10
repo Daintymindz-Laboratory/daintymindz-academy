@@ -4,12 +4,7 @@ import { useState, useEffect } from 'react';
 import ProfileButton from '@/components/ProfileButton';
 import { useUser } from '@/lib/user-context';
 
-const TRACKS: Record<string, { label: string; color: string; glow: string }> = {
-  AI: { label: 'Artificial Intelligence', color: '#D59C10', glow: 'rgba(213,156,16,0.15)' },
-  DA: { label: 'Data Analytics', color: '#4E8FD4', glow: 'rgba(78,143,212,0.15)' },
-  SE: { label: 'Software Engineering', color: '#4CAF7D', glow: 'rgba(76,175,125,0.15)' },
-  DO: { label: 'Data Operations', color: '#9B6FD4', glow: 'rgba(155,111,212,0.15)' },
-};
+const TRACK_FALLBACK = { label: '', color: '#6B7280', glow: 'rgba(107,114,128,0.15)' };
 
 const levelColors: Record<string, { bg: string; color: string }> = {
   Beginner: { bg: 'rgba(76,175,125,0.12)', color: '#4CAF7D' },
@@ -30,7 +25,7 @@ type Course = {
 };
 
 export default function MyCoursesPage() {
-  const { user: ctxUser } = useUser();
+  const { user: ctxUser, tracks } = useUser();
   const [courses, setCourses] = useState<Course[]>([]);
   const [userName, setUserName] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
@@ -216,7 +211,7 @@ export default function MyCoursesPage() {
           ) : (
             <div className="dm-grid-3">
               {courses.map(course => {
-                const track = TRACKS[course.track];
+                const track = tracks[course.track] ?? TRACK_FALLBACK;
                 const level = levelColors[course.level];
                 return (
                   <div key={course.id} style={{

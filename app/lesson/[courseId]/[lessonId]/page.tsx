@@ -6,6 +6,7 @@ import LessonContent from '@/components/LessonContent';
 import QuizLesson from '@/components/QuizLesson';
 import MiniProjectLesson from '@/components/MiniProjectLesson';
 import ProjectLesson from '@/components/ProjectLesson';
+import { useUser } from '@/lib/user-context';
 
 
 type Lesson = {
@@ -30,12 +31,7 @@ type Course = {
   level: string;
 };
 
-const TRACKS: Record<string, { color: string }> = {
-  AI: { color: '#D59C10' },
-  DA: { color: '#4E8FD4' },
-  SE: { color: '#4CAF7D' },
-  DO: { color: '#9B6FD4' },
-};
+const TRACK_FALLBACK = { color: '#6B7280' };
 
 const TYPE_COLORS: Record<string, string> = {
   project: '#9B6FD4',
@@ -65,6 +61,7 @@ export default function LessonPage() {
   const [completedIds, setCompletedIds] = useState<number[]>([]);
   const [userId, setUserId] = useState('');
   const [loading, setLoading] = useState(true);
+  const { tracks } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('dm-sidebar-collapsed') === '1';
@@ -211,7 +208,7 @@ export default function LessonPage() {
 
   const copyCode = () => { navigator.clipboard.writeText(currentLesson?.code || ''); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
-  const trackColor = course ? (TRACKS[course.track]?.color || '#D59C10') : '#D59C10';
+  const trackColor = course ? (tracks[course.track]?.color || TRACK_FALLBACK.color) : TRACK_FALLBACK.color;
   const currentIdx = lessons.findIndex(l => l.id === currentLesson?.id);
   const prevLesson = currentIdx > 0 ? lessons[currentIdx - 1] : null;
   const nextLesson = currentIdx < lessons.length - 1 ? lessons[currentIdx + 1] : null;

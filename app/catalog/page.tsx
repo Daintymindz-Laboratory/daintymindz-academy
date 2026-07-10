@@ -4,12 +4,7 @@ import { useState, useEffect } from 'react';
 import ProfileButton from '@/components/ProfileButton';
 import { useUser } from '@/lib/user-context';
 
-const TRACKS = {
-  AI: { label: 'Artificial Intelligence', color: '#D59C10', glow: 'rgba(213,156,16,0.15)' },
-  DA: { label: 'Data Analytics', color: '#4E8FD4', glow: 'rgba(78,143,212,0.15)' },
-  SE: { label: 'Software Engineering', color: '#4CAF7D', glow: 'rgba(76,175,125,0.15)' },
-  DO: { label: 'Data Operations', color: '#9B6FD4', glow: 'rgba(155,111,212,0.15)' },
-};
+const TRACK_FALLBACK = { label: '', color: '#6B7280', glow: 'rgba(107,114,128,0.15)' };
 
 const levelColors: Record<string, { bg: string; color: string }> = {
   Beginner: { bg: 'rgba(76,175,125,0.12)', color: '#4CAF7D' },
@@ -42,7 +37,7 @@ export default function Catalog() {
   const [enrolled, setEnrolled] = useState<number[]>([]);
   const [resumeMap, setResumeMap] = useState<Record<number, number>>({});
   const [loading, setLoading] = useState(true);
-  const { user: ctxUser } = useUser();
+  const { user: ctxUser, tracks } = useUser();
   const [userName, setUserName] = useState('');
   const [userId, setUserId] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
@@ -209,7 +204,7 @@ export default function Catalog() {
               border: trackFilter === 'All' ? '1px solid rgba(213,156,16,0.15)' : '1px solid transparent',
               color: trackFilter === 'All' ? '#D59C10' : '#6B7280',
             }}>All tracks</div>
-            {Object.entries(TRACKS).map(([code, t]) => (
+            {Object.entries(tracks).map(([code, t]) => (
               <div key={code} onClick={() => setTrackFilter(code)} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '9px 12px', borderRadius: 10, marginBottom: 2,
@@ -245,7 +240,7 @@ export default function Catalog() {
                   All Courses
                 </h1>
                 <p style={{ fontSize: 14, color: '#6B7280' }}>
-                  {filtered.length} {filtered.length === 1 ? 'course' : 'courses'} {trackFilter !== 'All' ? `in ${TRACKS[trackFilter as keyof typeof TRACKS]?.label}` : 'across all tracks'}
+                  {filtered.length} {filtered.length === 1 ? 'course' : 'courses'} {trackFilter !== 'All' ? `in ${tracks[trackFilter]?.label}` : 'across all tracks'}
                 </p>
               </div>
             </div>
@@ -282,7 +277,7 @@ export default function Catalog() {
           ) : (
             <div className="dm-grid-3">
               {filtered.map(course => {
-                const track = TRACKS[course.track as keyof typeof TRACKS];
+                const track = tracks[course.track] ?? TRACK_FALLBACK;
                 const level = levelColors[course.level];
                 const isEnrolled = enrolled.includes(course.id);
                 return (

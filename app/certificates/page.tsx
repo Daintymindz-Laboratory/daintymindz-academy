@@ -15,15 +15,10 @@ type Certificate = {
   };
 };
 
-const TRACKS: Record<string, { label: string; color: string; glow: string }> = {
-  AI: { label: 'Artificial Intelligence', color: '#D59C10', glow: 'rgba(213,156,16,0.15)' },
-  DA: { label: 'Data Analytics', color: '#4E8FD4', glow: 'rgba(78,143,212,0.15)' },
-  SE: { label: 'Software Engineering', color: '#4CAF7D', glow: 'rgba(76,175,125,0.15)' },
-  DO: { label: 'Data Operations', color: '#9B6FD4', glow: 'rgba(155,111,212,0.15)' },
-};
+const TRACK_FALLBACK = { label: '', color: '#6B7280', glow: 'rgba(107,114,128,0.15)' };
 
 export default function CertificatesPage() {
-  const { user: ctxUser } = useUser();
+  const { user: ctxUser, tracks } = useUser();
   const [certs, setCerts] = useState<Certificate[]>([]);
   const [userName, setUserName] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
@@ -154,7 +149,7 @@ export default function CertificatesPage() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
               {certs.map(cert => {
-                const track = TRACKS[cert.course?.track] || TRACKS.AI;
+                const track = tracks[cert.course?.track] ?? TRACK_FALLBACK;
                 return (
                   <div key={cert.id} style={{
                     background: '#22262B', border: '1px solid #2A2F35',
