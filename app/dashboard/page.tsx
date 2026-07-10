@@ -45,8 +45,8 @@ function ProgressRing({ progress, size = 48, color = '#D59C10' }: { progress: nu
 }
 
 function CourseCard({ course, recommended = false, onEnroll }: { course: Course; recommended?: boolean; onEnroll?: (id: number) => void }) {
-  const track = TRACKS[course.track as keyof typeof TRACKS];
-  const level = levelColors[course.level];
+  const track = TRACKS[course.track as keyof typeof TRACKS] ?? { label: course.track, color: '#6B7280', glow: 'rgba(107,114,128,0.15)' };
+  const level = levelColors[course.level] ?? { bg: 'rgba(107,114,128,0.12)', color: '#6B7280' };
   const [enrolled, setEnrolled] = useState(course.enrolled);
 
   return (
