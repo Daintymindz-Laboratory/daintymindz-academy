@@ -117,7 +117,10 @@ code, pre { font-family: 'JetBrains Mono', monospace; }
   border-right: 1px solid var(--graphite-card);
   background: var(--graphite-bg);
   display: flex; flex-direction: column;
-  transition: transform 0.25s ease;
+  transition: width 0.25s ease, transform 0.25s ease;
+}
+@media (min-width: 769px) {
+  .dm-lesson-sidebar.dm-collapsed { width: 0; overflow: hidden; border-right: none; }
 }
 @media (max-width: 768px) {
   .dm-lesson-sidebar {

@@ -204,7 +204,7 @@ export default function Dashboard() {
         if (lastActive !== today) {
           const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
           streak = lastActive === yesterday ? streak + 1 : 1;
-          supabase.from('profiles').update({ streak, last_active_date: today }).eq('id', authUser.id);
+          await supabase.from('profiles').update({ streak, last_active_date: today }).eq('id', authUser.id);
         }
         setUser({
           name: profile.full_name || authUser.email || 'Student',
@@ -333,7 +333,7 @@ export default function Dashboard() {
           borderRadius: 50, padding: '6px 14px',
         }}>
           <span style={{ fontSize: 14 }}>🔥</span>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#D59C10' }}>{user.streak} day streak</span>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#D59C10' }}>{user.streak} {user.streak === 1 ? 'day' : 'days'} streak</span>
         </div>
 
         {/* Avatar */}

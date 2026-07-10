@@ -23,11 +23,11 @@ const LANG_CONFIG: Record<Language, { declKeywords: string[]; printFn: string }>
   typescript: { declKeywords: ['function', 'const', 'let', 'var', 'class'], printFn: 'console.log' },
 };
 
-// " / " is used by admins as a newline separator in expected_output; Python
+// " / " and " then " are used by admins as newline separators in expected_output; Python
 // (and our own repr-ish comparisons) use single quotes where expected_output
 // often has double quotes, so both get normalized before comparing.
 export function normalizeOutput(s: string): string {
-  return s.trim().replace(/ \/ /g, '\n').replace(/'/g, '"');
+  return s.trim().replace(/ then /g, '\n').replace(/ \/ /g, '\n').replace(/'/g, '"');
 }
 
 // Replaces a (potentially multi-line) variable assignment in student code.

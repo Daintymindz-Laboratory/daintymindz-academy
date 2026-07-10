@@ -126,7 +126,7 @@ export default function MiniProjectLesson({
           letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 12,
         }}>Mini Project</div>
 
-        {(allPassed || isCompleted) && (
+        {allPassed && (
           <div style={{
             padding: '12px 16px', borderRadius: 12, marginBottom: 16,
             background: 'rgba(76,175,125,0.08)', border: '1px solid rgba(76,175,125,0.3)',

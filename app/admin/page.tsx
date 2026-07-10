@@ -107,6 +107,18 @@ export default function AdminPage() {
   const [editingCourse, setEditingCourse] = useState<Course>(EMPTY_COURSE);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('dm-sidebar-collapsed') === '1';
+    return false;
+  });
+  const toggleCollapse = () => {
+    setSidebarCollapsed(c => {
+      const next = !c;
+      localStorage.setItem('dm-sidebar-collapsed', next ? '1' : '0');
+      return next;
+    });
+  };
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [showLessonForm, setShowLessonForm] = useState(false);
@@ -551,7 +563,13 @@ export default function AdminPage() {
       setEditingLesson(inserted);
       await loadLessons(selectedCourse.id!);
       setSavingLesson(false);
-      showToast('Lesson created! Now add your questions below.');
+      if (inserted.type === 'quiz') {
+        showToast('Lesson created! Now add your questions below.');
+      } else if (inserted.type === 'mini_project' || inserted.type === 'project') {
+        showToast('Lesson created! Now add your test cases below.');
+      } else {
+        showToast('Lesson created!');
+      }
     }
   };
 
@@ -602,6 +620,7 @@ export default function AdminPage() {
         display: 'flex', alignItems: 'center', padding: '0 2rem', gap: 16,
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
       }}>
+        <button onClick={() => { if (window.innerWidth < 769) setSidebarOpen(o => !o); else toggleCollapse(); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', fontSize: 20, padding: 4 }}>☰</button>
         <Image src="/logo.png" alt="Daintymindz" width={90} height={32} style={{ objectFit: 'contain' }} />
         <div style={{
           fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
@@ -618,8 +637,11 @@ export default function AdminPage() {
 
       <div style={{ paddingTop: 60, display: 'flex', minHeight: '100vh' }}>
 
+        {/* Mobile backdrop */}
+        <div className={`dm-sidebar-backdrop${sidebarOpen ? ' open' : ''}`} onClick={() => setSidebarOpen(false)} />
+
         {/* SIDEBAR */}
-        <aside className="dm-sidebar" style={{ top: 60, padding: '1.5rem 0' }}>
+        <aside className={`dm-sidebar${sidebarOpen ? ' open' : ''}${sidebarCollapsed ? ' dm-collapsed' : ''}`} style={{ top: 60, padding: '1.5rem 0' }}>
           <div style={{ padding: '0 1rem' }}>
             <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>Admin</div>
             {[
@@ -646,7 +668,7 @@ export default function AdminPage() {
         </aside>
 
         {/* MAIN */}
-        <main className="dm-main" style={{ flex: 1, marginLeft: 240, padding: '2rem 2.5rem', overflowY: 'auto' }}>
+        <main className={`dm-main${sidebarCollapsed ? ' dm-collapsed' : ''}`} style={{ flex: 1, padding: '2rem 2.5rem', overflowY: 'auto' }}>
 
           {/* COURSE MANAGER */}
           {activeTab === 'courses' && (
