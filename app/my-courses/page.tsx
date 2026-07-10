@@ -113,8 +113,13 @@ export default function MyCoursesPage() {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from('enrollments').delete().eq('user_id', user.id).eq('course_id', courseId);
+    if (!user) { setUnenrolling(null); return; }
+    const { error } = await supabase.from('enrollments').delete().eq('user_id', user.id).eq('course_id', courseId);
+    if (error) {
+      console.error('Unenroll failed:', error);
+      setUnenrolling(null);
+      return;
+    }
     await supabase.from('progress').delete().eq('user_id', user.id).eq('course_id', courseId);
     setCourses(prev => prev.filter(c => c.id !== courseId));
     setUnenrolling(null);
