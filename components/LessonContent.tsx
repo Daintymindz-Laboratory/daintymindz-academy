@@ -89,10 +89,10 @@ export default function LessonContent({ content, trackColor, workerRef, pyodideR
             <em style={{ color: trackColor }}>{children}</em>
           ),
           ul: ({ children }) => (
-            <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>{children}</ul>
+            <ul style={{ paddingLeft: '1.5rem', marginBottom: '1rem', listStyleType: 'disc' }}>{children}</ul>
           ),
           ol: ({ children }) => (
-            <ol style={{ paddingLeft: '1.5rem', marginBottom: '1rem' }}>{children}</ol>
+            <ol style={{ paddingLeft: '1.5rem', marginBottom: '1rem', listStyleType: 'decimal' }}>{children}</ol>
           ),
           li: ({ children }) => (
             <li style={{ marginBottom: '0.4rem', color: '#9CA3AF' }}>{children}</li>
