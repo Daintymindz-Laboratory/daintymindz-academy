@@ -275,7 +275,10 @@ export default function Dashboard() {
   const userTrackData = tracks[userTrack] ?? TRACK_FALLBACK;
   const searchMatch = (c: Course) => !search || c.title.toLowerCase().includes(search.toLowerCase()) || (c.description || '').toLowerCase().includes(search.toLowerCase());
   const recommended = allCourses.filter(c => c.track === userTrack && !c.enrolled && searchMatch(c));
-  const explore = allCourses.filter(c => c.track !== userTrack && !c.enrolled && (activeTrack === 'All' || c.track === activeTrack) && searchMatch(c));
+  const explore = allCourses.filter(c =>
+    (activeTrack === 'All' ? c.track !== userTrack : c.track === activeTrack) &&
+    !c.enrolled && searchMatch(c)
+  );
   const completedCount = allCourses.filter(c => c.progress === 100).length;
   
   if (userLoading) return (
