@@ -1,6 +1,25 @@
 'use client';
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
+export type TrackData = { label: string; color: string; glow: string };
+export type TracksMap = Record<string, TrackData>;
+
+export const FALLBACK_TRACKS: TracksMap = {
+  AI: { label: 'Artificial Intelligence', color: '#D59C10', glow: 'rgba(213,156,16,0.15)' },
+  DA: { label: 'Data Analytics',          color: '#4E8FD4', glow: 'rgba(78,143,212,0.15)' },
+  SE: { label: 'Software Engineering',    color: '#4CAF7D', glow: 'rgba(76,175,125,0.15)' },
+  DO: { label: 'Data Operations',         color: '#9B6FD4', glow: 'rgba(155,111,212,0.15)' },
+};
+
+function hexToGlow(hex: string): string {
+  try {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},0.15)`;
+  } catch { return 'rgba(107,114,128,0.15)'; }
+}
+
 type UserData = {
   id: string;
   name: string;
@@ -16,6 +35,7 @@ type UserData = {
 type UserContextType = {
   user: UserData | null;
   loading: boolean;
+  tracks: TracksMap;
   setUser: (u: Partial<UserData>) => void;
   setAvatarUrl: (url: string) => void;
   signOut: () => Promise<void>;
@@ -53,7 +73,7 @@ function writeAvatarCache(url: string) {
 }
 
 const UserContext = createContext<UserContextType>({
-  user: null, loading: true,
+  user: null, loading: true, tracks: FALLBACK_TRACKS,
   setUser: () => {}, setAvatarUrl: () => {},
   signOut: async () => {}, refresh: async () => {},
 });
@@ -61,10 +81,21 @@ const UserContext = createContext<UserContextType>({
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<UserData | null>(readCache);
   const [loading, setLoading] = useState(!readCache());
+  const [tracks, setTracks] = useState<TracksMap>(FALLBACK_TRACKS);
 
   const load = useCallback(async () => {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
+
+    const { data: tracksData } = await supabase.from('tracks').select('code, label, color');
+    if (tracksData && tracksData.length > 0) {
+      const map: TracksMap = {};
+      for (const t of tracksData) {
+        map[t.code] = { label: t.label, color: t.color, glow: hexToGlow(t.color) };
+      }
+      setTracks(map);
+    }
+
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) { setLoading(false); return; }
 
@@ -125,7 +156,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <UserContext.Provider value={{ user, loading, setUser, setAvatarUrl, signOut, refresh: load }}>
+    <UserContext.Provider value={{ user, loading, tracks, setUser, setAvatarUrl, signOut, refresh: load }}>
       {children}
     </UserContext.Provider>
   );

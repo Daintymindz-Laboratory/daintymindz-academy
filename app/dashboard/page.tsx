@@ -3,12 +3,9 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useUser } from '@/lib/user-context';
 
-const TRACKS = {
-  AI: { label: 'Artificial Intelligence', color: '#D59C10', glow: 'rgba(213,156,16,0.15)' },
-  DA: { label: 'Data Analytics', color: '#4E8FD4', glow: 'rgba(78,143,212,0.15)' },
-  SE: { label: 'Software Engineering', color: '#4CAF7D', glow: 'rgba(76,175,125,0.15)' },
-  DO: { label: 'Data Operations', color: '#9B6FD4', glow: 'rgba(155,111,212,0.15)' },
-};
+import type { TracksMap } from '@/lib/user-context';
+
+const TRACK_FALLBACK = { label: '', color: '#6B7280', glow: 'rgba(107,114,128,0.15)' };
 
 type Course = {
   id: number;
@@ -44,9 +41,9 @@ function ProgressRing({ progress, size = 48, color = '#D59C10' }: { progress: nu
   );
 }
 
-function CourseCard({ course, recommended = false, onEnroll }: { course: Course; recommended?: boolean; onEnroll?: (id: number) => void }) {
-  const track = TRACKS[course.track as keyof typeof TRACKS];
-  const level = levelColors[course.level];
+function CourseCard({ course, tracks, recommended = false, onEnroll }: { course: Course; tracks: TracksMap; recommended?: boolean; onEnroll?: (id: number) => void }) {
+  const track = tracks[course.track] ?? { ...TRACK_FALLBACK, label: course.track };
+  const level = levelColors[course.level] ?? { bg: 'rgba(107,114,128,0.12)', color: '#6B7280' };
   const [enrolled, setEnrolled] = useState(course.enrolled);
 
   return (
@@ -156,7 +153,7 @@ export default function Dashboard() {
     if (typeof window !== 'undefined') return localStorage.getItem('dm-sidebar-collapsed') === '1';
     return false;
   });
-  const { setAvatarUrl: setContextAvatarUrl } = useUser();
+  const { setAvatarUrl: setContextAvatarUrl, tracks } = useUser();
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [profileBio, setProfileBio] = useState('');
@@ -274,10 +271,17 @@ export default function Dashboard() {
       return next;
     });
   };
-  const userTrack = user.track as keyof typeof TRACKS;
+  const userTrack = user.track;
+  const userTrackData = tracks[userTrack] ?? TRACK_FALLBACK;
   const searchMatch = (c: Course) => !search || c.title.toLowerCase().includes(search.toLowerCase()) || (c.description || '').toLowerCase().includes(search.toLowerCase());
-  const recommended = allCourses.filter(c => c.track === userTrack && !c.enrolled && searchMatch(c));
-  const explore = allCourses.filter(c => c.track !== userTrack && !c.enrolled && (activeTrack === 'All' || c.track === activeTrack) && searchMatch(c));
+  const trackFiltered = activeTrack !== 'All';
+  const recommended = !trackFiltered ? allCourses.filter(c => c.track === userTrack && !c.enrolled && searchMatch(c)) : [];
+  const explore = !trackFiltered
+    ? allCourses.filter(c => c.track !== userTrack && !c.enrolled && searchMatch(c))
+    : allCourses.filter(c => c.track === activeTrack && searchMatch(c));
+  const enrolledVisible = !trackFiltered
+    ? allCourses.filter(c => c.enrolled)
+    : allCourses.filter(c => c.enrolled && c.track === activeTrack);
   const completedCount = allCourses.filter(c => c.progress === 100).length;
   
   if (userLoading) return (
@@ -392,7 +396,7 @@ export default function Dashboard() {
               <div style={{ fontSize: 10, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>
                 Tracks
               </div>
-              {Object.entries(TRACKS).map(([code, t]) => (
+              {Object.entries(tracks).map(([code, t]) => (
                 <div
                   key={code}
                   onClick={() => setActiveTrack(code)}
@@ -438,7 +442,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5' }}>{user.name}</div>
-                    <div style={{ fontSize: 11, color: TRACKS[userTrack].color, fontFamily: 'JetBrains Mono, monospace' }}>{userTrack} track</div>
+                    <div style={{ fontSize: 11, color: userTrackData.color, fontFamily: 'JetBrains Mono, monospace' }}>{userTrack} track</div>
                   </div>
                 </div>
                 <button onClick={async () => {
@@ -479,7 +483,7 @@ export default function Dashboard() {
               Welcome back, {user.name.split(' ')[0]} 👋
             </h1>
             <p style={{ fontSize: 14, color: '#6B7280' }}>
-              You are on the {TRACKS[userTrack].label} track. Keep going.
+              You are on the {userTrackData.label} track. Keep going.
             </p>
           </div>
 
@@ -505,20 +509,20 @@ export default function Dashboard() {
           </div>
 
           {/* Continue learning */}
-          {allCourses.filter(c => c.enrolled).length > 0 && (
+          {enrolledVisible.length > 0 && (
             <div style={{ marginBottom: '2.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>My Courses</h2>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>{allCourses.filter(c => c.enrolled).length} ENROLLED</span>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>{enrolledVisible.length} ENROLLED</span>
               </div>
               <div className="dm-grid-3">
-                {allCourses.filter(c => c.enrolled).map(c => (
+                {enrolledVisible.map(c => (
                   <div key={c.id} style={{
                     background: '#22262B', border: '1px solid #2A2F35',
                     borderRadius: 20, padding: '20px 22px',
                     display: 'flex', alignItems: 'center', gap: 16,
                   }}>
-                    <ProgressRing progress={c.progress} color={TRACKS[c.track as keyof typeof TRACKS].color} />
+                    <ProgressRing progress={c.progress} color={(tracks[c.track] ?? TRACK_FALLBACK).color} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: '#F5F5F5', marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.title}</div>
                       <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>{c.progress}% complete</div>
@@ -541,27 +545,33 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Recommended */}
-          <div style={{ marginBottom: '2.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>Recommended for you</h2>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: TRACKS[userTrack].color, letterSpacing: '0.1em' }}>{userTrack} TRACK</span>
+          {/* Recommended - only shown on All tab */}
+          {!trackFiltered && recommended.length > 0 && (
+            <div style={{ marginBottom: '2.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>Recommended for you</h2>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: userTrackData.color, letterSpacing: '0.1em' }}>{userTrack} TRACK</span>
+              </div>
+              <div className="dm-grid-3">
+                {recommended.map(c => <CourseCard key={c.id} course={c} tracks={tracks} recommended />)}
+              </div>
             </div>
-            <div className="dm-grid-3">
-              {recommended.map(c => <CourseCard key={c.id} course={c} recommended />)}
-            </div>
-          </div>
+          )}
 
-          {/* Explore */}
-          <div style={{ marginBottom: '2.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>Explore other tracks</h2>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>9 COURSES</span>
+          {/* Explore / Track filtered */}
+          {explore.length > 0 && (
+            <div style={{ marginBottom: '2.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>
+                  {trackFiltered ? `${tracks[activeTrack]?.label ?? activeTrack} courses` : 'Explore other tracks'}
+                </h2>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>{explore.length} COURSES</span>
+              </div>
+              <div className="dm-grid-3">
+                {explore.map(c => <CourseCard key={c.id} course={c} tracks={tracks} />)}
+              </div>
             </div>
-            <div className="dm-grid-3">
-              {explore.map(c => <CourseCard key={c.id} course={c} />)}
-            </div>
-          </div>
+          )}
         </main>
       </div>
 
@@ -651,8 +661,8 @@ export default function Dashboard() {
           {/* Track */}
           <div>
             <label style={{ fontSize: 11, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Track</label>
-            <div style={{ fontSize: 14, fontWeight: 600, color: TRACKS[userTrack].color, padding: '10px 14px', background: `${TRACKS[userTrack].color}0D`, borderRadius: 10, border: `1px solid ${TRACKS[userTrack].color}25` }}>
-              {TRACKS[userTrack].label}
+            <div style={{ fontSize: 14, fontWeight: 600, color: userTrackData.color, padding: '10px 14px', background: `${userTrackData.color}0D`, borderRadius: 10, border: `1px solid ${userTrackData.color}25` }}>
+              {userTrackData.label}
             </div>
           </div>
 

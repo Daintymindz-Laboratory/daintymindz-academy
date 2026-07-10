@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { QRCodeCanvas as QRCode } from 'qrcode.react';
 import Head from 'next/head';
+import { FALLBACK_TRACKS } from '@/lib/user-context';
 
 type CertData = {
   cert_id: string;
@@ -22,12 +23,6 @@ type CreatorProfile = {
   position: string | null;
 };
 
-const TRACKS: Record<string, { label: string; color: string }> = {
-  AI: { label: 'Artificial Intelligence', color: '#D59C10' },
-  DA: { label: 'Data Analytics', color: '#4E8FD4' },
-  SE: { label: 'Software Engineering', color: '#4CAF7D' },
-  DO: { label: 'Data Operations', color: '#9B6FD4' },
-};
 
 
 export default function CertificateViewPage() {
@@ -38,6 +33,7 @@ export default function CertificateViewPage() {
   const [sealUrl, setSealUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [tracks, setTracks] = useState(FALLBACK_TRACKS);
   const verifyUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/certificate/${certId}`
     : `https://academy.daintymindz.com/certificate/${certId}`;
@@ -46,6 +42,20 @@ export default function CertificateViewPage() {
     const init = async () => {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
+
+      const { data: tracksData } = await supabase.from('tracks').select('code, label, color');
+      if (tracksData && tracksData.length > 0) {
+        const map: typeof FALLBACK_TRACKS = {};
+        for (const t of tracksData) {
+          try {
+            const r = parseInt(t.color.slice(1, 3), 16);
+            const g = parseInt(t.color.slice(3, 5), 16);
+            const b = parseInt(t.color.slice(5, 7), 16);
+            map[t.code] = { label: t.label, color: t.color, glow: `rgba(${r},${g},${b},0.15)` };
+          } catch { map[t.code] = { label: t.label, color: t.color, glow: 'rgba(107,114,128,0.15)' }; }
+        }
+        setTracks(map);
+      }
 
       const { data } = await supabase
         .from('certificates')
@@ -79,7 +89,7 @@ export default function CertificateViewPage() {
   const handlePrint = () => {
     if (!cert) return;
     const origin = window.location.origin;
-    const trackColor = TRACKS[cert.courses?.track]?.color || '#D59C10';
+    const trackColor = tracks[cert.courses?.track]?.color || '#D59C10';
     const win = window.open('', '_blank', 'width=1400,height=1000');
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html><head>
@@ -217,7 +227,7 @@ html, body { width: 297mm; height: 210mm; overflow: hidden; background: white; f
     </div>
   );
 
-  const track = TRACKS[cert.courses?.track] || TRACKS.AI;
+  const track = tracks[cert.courses?.track] ?? tracks['AI'] ?? { label: 'Artificial Intelligence', color: '#D59C10', glow: 'rgba(213,156,16,0.15)' };
   const issueDate = new Date(cert.issued_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
   return (
