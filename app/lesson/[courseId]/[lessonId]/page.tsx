@@ -6,6 +6,7 @@ import LessonContent from '@/components/LessonContent';
 import QuizLesson from '@/components/QuizLesson';
 import MiniProjectLesson from '@/components/MiniProjectLesson';
 import ProjectLesson from '@/components/ProjectLesson';
+import LessonSubmission from '@/components/LessonSubmission';
 import { useUser } from '@/lib/user-context';
 
 
@@ -22,6 +23,7 @@ type Lesson = {
   video_url: string;
   order_index: number;
   is_published: boolean;
+  requires_review: boolean;
 };
 
 type Course = {
@@ -222,7 +224,7 @@ export default function LessonPage() {
   const lessonType = currentLesson.type;
   const typeColor = TYPE_COLORS[lessonType] || '#D59C10';
   const GATED_TYPES = ['quiz', 'mini_project'];
-  const needsPass = GATED_TYPES.includes(lessonType);
+  const needsPass = GATED_TYPES.includes(lessonType) || currentLesson.requires_review;
   const canProceed = !needsPass || isCompleted;
 
   const prevBtn = <button onClick={() => prevLesson && switchLesson(prevLesson)} disabled={!prevLesson} style={{ padding: '9px 20px', borderRadius: 50, background: 'transparent', border: '1px solid #2A2F35', color: prevLesson ? '#F5F5F5' : '#3A3F46', fontSize: 13, fontWeight: 500, cursor: prevLesson ? 'pointer' : 'not-allowed', fontFamily: 'DM Sans, sans-serif' }}>Previous</button>;
@@ -232,7 +234,9 @@ export default function LessonPage() {
       {prevBtn}
       {needsPass && !isCompleted && nextLesson && (
         <span style={{ fontSize: 12, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textAlign: 'center' }}>
-          Pass this {lessonType === 'quiz' ? 'quiz' : 'mini project'} to continue
+          {currentLesson.requires_review
+            ? 'Submit your work and wait for approval to continue'
+            : `Pass this ${lessonType === 'quiz' ? 'quiz' : 'mini project'} to continue`}
         </span>
       )}
       {!needsPass && <div />}
@@ -309,6 +313,7 @@ export default function LessonPage() {
               codeLabel={currentLesson.code_label || 'solution.py'}
               embedUrl={embedUrl}
               isCompleted={isCompleted}
+              requiresReview={currentLesson.requires_review}
               onComplete={markComplete}
             />
             {simpleNavBar}
@@ -348,10 +353,26 @@ export default function LessonPage() {
                   </pre>
                 </div>
               )}
+              {currentLesson.requires_review && (
+                <LessonSubmission
+                  key={currentLesson.id}
+                  lessonId={Number(currentLesson.id)}
+                  userId={userId}
+                  trackColor={trackColor}
+                  isCompleted={isCompleted}
+                  onComplete={markComplete}
+                />
+              )}
             </div>
             <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #2A2F35', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, gap: 10 }}>
               {prevBtn}
-              <button onClick={markComplete} style={{ padding: '9px 24px', borderRadius: 50, background: isCompleted ? 'rgba(76,175,125,0.1)' : trackColor, border: isCompleted ? '1px solid rgba(76,175,125,0.3)' : 'none', color: isCompleted ? '#4CAF7D' : '#1A1D21', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>{isCompleted ? 'Completed' : isLastLesson ? 'Finish & Earn Certificate' : 'Mark Complete'}</button>
+              {currentLesson.requires_review ? (
+                <span style={{ fontSize: 12, color: isCompleted ? '#4CAF7D' : '#6B7280', fontFamily: 'JetBrains Mono, monospace', textAlign: 'center' }}>
+                  {isCompleted ? 'Approved' : 'Submit above and wait for approval to continue'}
+                </span>
+              ) : (
+                <button onClick={markComplete} style={{ padding: '9px 24px', borderRadius: 50, background: isCompleted ? 'rgba(76,175,125,0.1)' : trackColor, border: isCompleted ? '1px solid rgba(76,175,125,0.3)' : 'none', color: isCompleted ? '#4CAF7D' : '#1A1D21', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>{isCompleted ? 'Completed' : isLastLesson ? 'Finish & Earn Certificate' : 'Mark Complete'}</button>
+              )}
               {nextBtn}
             </div>
           </div>
