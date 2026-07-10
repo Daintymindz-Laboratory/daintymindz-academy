@@ -274,11 +274,14 @@ export default function Dashboard() {
   const userTrack = user.track;
   const userTrackData = tracks[userTrack] ?? TRACK_FALLBACK;
   const searchMatch = (c: Course) => !search || c.title.toLowerCase().includes(search.toLowerCase()) || (c.description || '').toLowerCase().includes(search.toLowerCase());
-  const recommended = allCourses.filter(c => c.track === userTrack && !c.enrolled && searchMatch(c));
-  const explore = allCourses.filter(c =>
-    (activeTrack === 'All' ? c.track !== userTrack : c.track === activeTrack) &&
-    !c.enrolled && searchMatch(c)
-  );
+  const trackFiltered = activeTrack !== 'All';
+  const recommended = !trackFiltered ? allCourses.filter(c => c.track === userTrack && !c.enrolled && searchMatch(c)) : [];
+  const explore = !trackFiltered
+    ? allCourses.filter(c => c.track !== userTrack && !c.enrolled && searchMatch(c))
+    : allCourses.filter(c => c.track === activeTrack && searchMatch(c));
+  const enrolledVisible = !trackFiltered
+    ? allCourses.filter(c => c.enrolled)
+    : allCourses.filter(c => c.enrolled && c.track === activeTrack);
   const completedCount = allCourses.filter(c => c.progress === 100).length;
   
   if (userLoading) return (
@@ -506,14 +509,14 @@ export default function Dashboard() {
           </div>
 
           {/* Continue learning */}
-          {allCourses.filter(c => c.enrolled).length > 0 && (
+          {enrolledVisible.length > 0 && (
             <div style={{ marginBottom: '2.5rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>My Courses</h2>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>{allCourses.filter(c => c.enrolled).length} ENROLLED</span>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>{enrolledVisible.length} ENROLLED</span>
               </div>
               <div className="dm-grid-3">
-                {allCourses.filter(c => c.enrolled).map(c => (
+                {enrolledVisible.map(c => (
                   <div key={c.id} style={{
                     background: '#22262B', border: '1px solid #2A2F35',
                     borderRadius: 20, padding: '20px 22px',
@@ -542,27 +545,33 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Recommended */}
-          <div style={{ marginBottom: '2.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>Recommended for you</h2>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: userTrackData.color, letterSpacing: '0.1em' }}>{userTrack} TRACK</span>
+          {/* Recommended - only shown on All tab */}
+          {!trackFiltered && recommended.length > 0 && (
+            <div style={{ marginBottom: '2.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>Recommended for you</h2>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: userTrackData.color, letterSpacing: '0.1em' }}>{userTrack} TRACK</span>
+              </div>
+              <div className="dm-grid-3">
+                {recommended.map(c => <CourseCard key={c.id} course={c} tracks={tracks} recommended />)}
+              </div>
             </div>
-            <div className="dm-grid-3">
-              {recommended.map(c => <CourseCard key={c.id} course={c} tracks={tracks} recommended />)}
-            </div>
-          </div>
+          )}
 
-          {/* Explore */}
-          <div style={{ marginBottom: '2.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>Explore other tracks</h2>
-              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>9 COURSES</span>
+          {/* Explore / Track filtered */}
+          {explore.length > 0 && (
+            <div style={{ marginBottom: '2.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <h2 style={{ fontSize: 17, fontWeight: 700, color: '#F5F5F5' }}>
+                  {trackFiltered ? `${tracks[activeTrack]?.label ?? activeTrack} courses` : 'Explore other tracks'}
+                </h2>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', letterSpacing: '0.1em' }}>{explore.length} COURSES</span>
+              </div>
+              <div className="dm-grid-3">
+                {explore.map(c => <CourseCard key={c.id} course={c} tracks={tracks} />)}
+              </div>
             </div>
-            <div className="dm-grid-3">
-              {explore.map(c => <CourseCard key={c.id} course={c} tracks={tracks} />)}
-            </div>
-          </div>
+          )}
         </main>
       </div>
 
