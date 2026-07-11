@@ -133,19 +133,24 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {contacts.map(c => (
-            <div key={c.id} onClick={() => setSelectedId(c.id)} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid #2A2F35', background: selectedId === c.id ? 'rgba(213,156,16,0.06)' : 'transparent', borderLeft: selectedId === c.id ? `2px solid ${color}` : '2px solid transparent' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5' }}>{c.name}</span>
-                {c.unread > 0 && <span style={{ background: color, color: '#1A1D21', fontSize: 9, fontWeight: 700, borderRadius: 10, padding: '1px 5px', fontFamily: 'JetBrains Mono, monospace' }}>{c.unread}</span>}
+          {contacts.map(c => {
+            const isInstructor = !isAdmin && admins.find(a => a.id === c.id);
+            return (
+              <div key={c.id} onClick={() => setSelectedId(c.id)} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid #2A2F35', background: selectedId === c.id ? 'rgba(213,156,16,0.06)' : 'transparent', borderLeft: selectedId === c.id ? `2px solid ${color}` : '2px solid transparent' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5' }}>{c.name}</span>
+                  {c.unread > 0 && <span style={{ background: color, color: '#1A1D21', fontSize: 9, fontWeight: 700, borderRadius: 10, padding: '1px 5px', fontFamily: 'JetBrains Mono, monospace' }}>{c.unread}</span>}
+                </div>
+                {isInstructor && <div style={{ fontSize: 10, color: color, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Your Instructor</div>}
+                {c.lastMessage && <div style={{ fontSize: 11, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.lastMessage}</div>}
               </div>
-              {c.lastMessage && <div style={{ fontSize: 11, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.lastMessage}</div>}
-            </div>
-          ))}
+            );
+          })}
 
           {!isAdmin && admins.filter(a => !contacts.find(c => c.id === a.id)).map(a => (
-            <div key={a.id} onClick={() => startNewChat(a.id)} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid #2A2F35', opacity: 0.6 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5' }}>{a.name}</div>
+            <div key={a.id} onClick={() => startNewChat(a.id)} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid #2A2F35' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5', marginBottom: 2 }}>{a.name}</div>
+              <div style={{ fontSize: 10, color: color, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Your Instructor</div>
               <div style={{ fontSize: 11, color: '#6B7280' }}>Start a conversation</div>
             </div>
           ))}
