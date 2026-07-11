@@ -150,9 +150,16 @@ export default function LessonPage() {
   const saveNote = async (text: string, lid: number, uid: string) => {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
-    await supabase.from('lesson_notes').upsert({ user_id: uid, lesson_id: lid, note: text, updated_at: new Date().toISOString() }, { onConflict: 'user_id,lesson_id' });
-    setNotesSaved(true);
-    setTimeout(() => setNotesSaved(false), 2000);
+    const { error } = await supabase.from('lesson_notes').upsert(
+      { user_id: uid, lesson_id: lid, note: text, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,lesson_id' }
+    );
+    if (error) {
+      console.error('note save error:', error);
+    } else {
+      setNotesSaved(true);
+      setTimeout(() => setNotesSaved(false), 2000);
+    }
   };
 
   const handleNoteChange = (text: string) => {
