@@ -214,25 +214,30 @@ export default function AdminPage() {
   const loadSubmissions = async (supabase: any) => {
     const { data, error } = await supabase
       .from('project_submissions')
-      .select('*, courses(title), lessons(title)')
+      .select('*')
       .order('submitted_at', { ascending: false });
     if (error) { console.error('loadSubmissions error:', error); return; }
     if (!data || data.length === 0) { setSubmissions([]); setPendingCount(0); return; }
 
     const userIds = [...new Set(data.map((s: any) => s.user_id as string))];
-    const { data: profilesData } = await supabase
-      .from('profiles')
-      .select('id, full_name')
-      .in('id', userIds);
-    const profileMap: Record<string, string> = Object.fromEntries(
-      (profilesData || []).map((p: any) => [p.id, p.full_name])
-    );
+    const courseIds = [...new Set(data.map((s: any) => s.course_id as number))];
+    const lessonIds = [...new Set(data.map((s: any) => s.lesson_id as number))];
+
+    const [{ data: profilesData }, { data: coursesData }, { data: lessonsData }] = await Promise.all([
+      supabase.from('profiles').select('id, full_name').in('id', userIds),
+      supabase.from('courses').select('id, title').in('id', courseIds),
+      supabase.from('lessons').select('id, title').in('id', lessonIds),
+    ]);
+
+    const profileMap: Record<string, string> = Object.fromEntries((profilesData || []).map((p: any) => [p.id, p.full_name]));
+    const courseMap: Record<number, string> = Object.fromEntries((coursesData || []).map((c: any) => [c.id, c.title]));
+    const lessonMap: Record<number, string> = Object.fromEntries((lessonsData || []).map((l: any) => [l.id, l.title]));
 
     const mapped = data.map((s: any) => ({
       ...s,
       student_name: profileMap[s.user_id] || 'Unknown',
-      course_title: s.courses?.title || '',
-      lesson_title: s.lessons?.title || '',
+      course_title: courseMap[s.course_id] || '',
+      lesson_title: lessonMap[s.lesson_id] || '',
     }));
     setSubmissions(mapped);
     setPendingCount(mapped.filter((s: any) => s.status === 'pending').length);
