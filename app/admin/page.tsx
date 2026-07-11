@@ -212,20 +212,30 @@ export default function AdminPage() {
   };
 
   const loadSubmissions = async (supabase: any) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('project_submissions')
-      .select('*, profiles(full_name), courses(title), lessons(title)')
+      .select('*, courses(title), lessons(title)')
       .order('submitted_at', { ascending: false });
-    if (data) {
-      const mapped = data.map((s: any) => ({
-        ...s,
-        student_name: s.profiles?.full_name || 'Unknown',
-        course_title: s.courses?.title || '',
-        lesson_title: s.lessons?.title || '',
-      }));
-      setSubmissions(mapped);
-      setPendingCount(mapped.filter((s: any) => s.status === 'pending').length);
-    }
+    if (error) { console.error('loadSubmissions error:', error); return; }
+    if (!data || data.length === 0) { setSubmissions([]); setPendingCount(0); return; }
+
+    const userIds = [...new Set(data.map((s: any) => s.user_id as string))];
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', userIds);
+    const profileMap: Record<string, string> = Object.fromEntries(
+      (profilesData || []).map((p: any) => [p.id, p.full_name])
+    );
+
+    const mapped = data.map((s: any) => ({
+      ...s,
+      student_name: profileMap[s.user_id] || 'Unknown',
+      course_title: s.courses?.title || '',
+      lesson_title: s.lessons?.title || '',
+    }));
+    setSubmissions(mapped);
+    setPendingCount(mapped.filter((s: any) => s.status === 'pending').length);
   };
 
   const gradeSubmission = async (status: 'approved' | 'rework') => {
@@ -730,6 +740,7 @@ export default function AdminPage() {
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={labelStyle}>Description *</label>
                       <textarea
+                        name="course-description"
                         value={editingCourse.description}
                         onChange={e => setEditingCourse(p => ({ ...p, description: e.target.value }))}
                         placeholder="A short description of what students will learn..."
@@ -935,7 +946,7 @@ export default function AdminPage() {
                             <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: 16 }}>
                               <div>
                                 <label style={labelStyle}>Code Example (shown on right panel)</label>
-                                <textarea value={editingLesson.code}
+                                <textarea name="lesson-code" value={editingLesson.code}
                                   onChange={e => setEditingLesson(p => p ? ({ ...p, code: e.target.value }) : p)}
                                   placeholder="# Python code shown alongside the lesson..."
                                   rows={10}
@@ -1007,7 +1018,7 @@ export default function AdminPage() {
                             </div>
                             <div>
                               <label style={labelStyle}>Starter Code (pre-filled in Monaco editor)</label>
-                              <textarea value={editingLesson.starter_code}
+                              <textarea name="lesson-starter-code" value={editingLesson.starter_code}
                                 onChange={e => setEditingLesson(p => p ? ({ ...p, starter_code: e.target.value }) : p)}
                                 placeholder="# Starter code for students..."
                                 rows={10}
@@ -1057,7 +1068,7 @@ export default function AdminPage() {
                                     </div>
                                     <div style={{ marginBottom: 12 }}>
                                       <label style={labelStyle}>Question Text {editingQuestion.question_type === 'code_output' ? '(Python code snippet)' : ''}</label>
-                                      <textarea value={editingQuestion.question_text} onChange={e => setEditingQuestion(q => q ? ({ ...q, question_text: e.target.value }) : q)} rows={3} style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, fontFamily: editingQuestion.question_type === 'code_output' ? 'JetBrains Mono, monospace' : 'DM Sans, sans-serif', fontSize: 13 }} placeholder="What is the output of the following code?" />
+                                      <textarea name="question-text" value={editingQuestion.question_text} onChange={e => setEditingQuestion(q => q ? ({ ...q, question_text: e.target.value }) : q)} rows={3} style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, fontFamily: editingQuestion.question_type === 'code_output' ? 'JetBrains Mono, monospace' : 'DM Sans, sans-serif', fontSize: 13 }} placeholder="What is the output of the following code?" />
                                     </div>
                                     <div style={{ marginBottom: 12 }}>
                                       <label style={labelStyle}>Options (one per line)</label>
@@ -1077,7 +1088,7 @@ export default function AdminPage() {
                                     </div>
                                     <div style={{ marginBottom: 16 }}>
                                       <label style={labelStyle}>Explanation (shown after submit, optional)</label>
-                                      <textarea value={editingQuestion.explanation} onChange={e => setEditingQuestion(q => q ? ({ ...q, explanation: e.target.value }) : q)} rows={2} style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, fontSize: 13 }} />
+                                      <textarea name="question-explanation" value={editingQuestion.explanation} onChange={e => setEditingQuestion(q => q ? ({ ...q, explanation: e.target.value }) : q)} rows={2} style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, fontSize: 13 }} />
                                     </div>
                                     <div style={{ display: 'flex', gap: 10 }}>
                                       <button onClick={saveQuestion} disabled={savingQuestion} style={{ background: '#D59C10', border: 'none', borderRadius: 50, padding: '8px 22px', fontSize: 13, fontWeight: 700, color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>{savingQuestion ? 'Saving...' : editingQuestion.id ? 'Update Question' : 'Save Question'}</button>
@@ -1150,7 +1161,7 @@ export default function AdminPage() {
                                     </div>
                                     <div style={{ marginBottom: 12 }}>
                                       <label style={labelStyle}>Test Code (appended to student code, should print expected output)</label>
-                                      <textarea value={editingTestCase.test_code} onChange={e => setEditingTestCase(t => t ? ({ ...t, test_code: e.target.value }) : t)} rows={5} style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, lineHeight: 1.7, fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }} placeholder={'print(add(2, 3))'} />
+                                      <textarea name="test-code" value={editingTestCase.test_code} onChange={e => setEditingTestCase(t => t ? ({ ...t, test_code: e.target.value }) : t)} rows={5} style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, lineHeight: 1.7, fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }} placeholder={'print(add(2, 3))'} />
                                     </div>
                                     <div style={{ marginBottom: 16 }}>
                                       <label style={labelStyle}>Expected Output (exact match after trim)</label>
@@ -1624,6 +1635,7 @@ export default function AdminPage() {
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 10, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Feedback for student</div>
                 <textarea
+                  name="grading-feedback"
                   value={gradingFeedback}
                   onChange={e => setGradingFeedback(e.target.value)}
                   placeholder="Write feedback (required when returning for rework)..."

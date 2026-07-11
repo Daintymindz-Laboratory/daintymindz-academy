@@ -7,7 +7,7 @@ import QuizLesson from '@/components/QuizLesson';
 import MiniProjectLesson from '@/components/MiniProjectLesson';
 import ProjectLesson from '@/components/ProjectLesson';
 import LessonSubmission from '@/components/LessonSubmission';
-import { useUser } from '@/lib/user-context';
+import { useUser, updateStreak } from '@/lib/user-context';
 
 
 type Lesson = {
@@ -63,7 +63,7 @@ export default function LessonPage() {
   const [completedIds, setCompletedIds] = useState<number[]>([]);
   const [userId, setUserId] = useState('');
   const [loading, setLoading] = useState(true);
-  const { tracks } = useUser();
+  const { tracks, setUser } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('dm-sidebar-collapsed') === '1';
@@ -161,7 +161,10 @@ export default function LessonPage() {
     setCurrentLesson(lesson);
     setSidebarOpen(false);
     setNoteText('');
-    if (userId) loadNote(Number(lesson.id), userId);
+    if (userId) {
+      loadNote(Number(lesson.id), userId);
+      updateStreak(userId).then(streak => setUser({ streak }));
+    }
     window.history.pushState({}, '', `/lesson/${courseId}/${lesson.id}`);
   };
 
@@ -171,6 +174,7 @@ export default function LessonPage() {
     const safe = completedIds.map(Number);
     const newCompleted = safe.includes(lessonIdNum) ? safe : [...safe, lessonIdNum];
     setCompletedIds(newCompleted);
+    updateStreak(userId).then(streak => setUser({ streak }));
 
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
@@ -398,6 +402,7 @@ export default function LessonPage() {
             </div>
           </div>
           <textarea
+            name="lesson-notes"
             value={noteText}
             onChange={e => handleNoteChange(e.target.value)}
             placeholder={'Write your notes here...\n\nThey are saved automatically.'}

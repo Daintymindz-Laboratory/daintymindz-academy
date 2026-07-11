@@ -195,18 +195,10 @@ export default function Dashboard() {
       const certsCount = certsData?.length || 0;
 
       if (profile) {
-        const today = new Date().toISOString().slice(0, 10);
-        const lastActive = profile.last_active_date as string | null;
-        let streak = profile.streak as number || 0;
-        if (lastActive !== today) {
-          const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-          streak = lastActive === yesterday ? streak + 1 : 1;
-          await supabase.from('profiles').update({ streak, last_active_date: today }).eq('id', authUser.id);
-        }
         setUser({
           name: profile.full_name || authUser.email || 'Student',
           track: profile.track || 'AI',
-          streak,
+          streak: profile.streak as number || 0,
           certsEarned: certsCount,
           isAdmin: !!profile.is_admin,
         });
@@ -670,6 +662,7 @@ export default function Dashboard() {
           <div>
             <label style={{ fontSize: 11, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Bio</label>
             <textarea
+              name="bio"
               value={profileBio}
               onChange={e => setProfileBio(e.target.value)}
               placeholder="Tell us about yourself..."

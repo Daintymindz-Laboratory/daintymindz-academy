@@ -177,14 +177,14 @@ export default function ProjectLesson({
         </div>
       )}
       {!submission && !showSubmitForm && (
-        <button onClick={() => setShowSubmitForm(true)} style={{ background: 'transparent', border: `1px solid ${trackColor}`, borderRadius: 20, padding: '6px 18px', fontSize: 13, fontWeight: 600, color: trackColor, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-          Submit for review
+        <button onClick={() => setShowSubmitForm(true)} style={{ background: trackColor, border: 'none', borderRadius: 10, padding: '13px 0', fontSize: 15, fontWeight: 700, color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', width: '100%', display: 'block', letterSpacing: '-0.01em' }}>
+          Submit Project for Review
         </button>
       )}
       {!submission && showSubmitForm && (
         <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 12, padding: '14px 16px' }}>
           <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 8 }}>Add a note for your instructor (optional)</div>
-          <textarea value={submitNote} onChange={e => setSubmitNote(e.target.value)} placeholder="e.g. I got stuck on part 2..." rows={3} style={{ width: '100%', background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 8, padding: '8px 10px', fontSize: 13, color: '#F5F5F5', fontFamily: 'DM Sans, sans-serif', resize: 'vertical', boxSizing: 'border-box' }} />
+          <textarea name="submit-note" value={submitNote} onChange={e => setSubmitNote(e.target.value)} placeholder="e.g. I got stuck on part 2..." rows={3} style={{ width: '100%', background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 8, padding: '8px 10px', fontSize: 13, color: '#F5F5F5', fontFamily: 'DM Sans, sans-serif', resize: 'vertical', boxSizing: 'border-box' }} />
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             <button onClick={submitForReview} disabled={submitting} style={{ background: trackColor, border: 'none', borderRadius: 20, padding: '6px 20px', fontSize: 13, fontWeight: 700, color: '#1A1D21', cursor: submitting ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
               {submitting ? 'Submitting...' : 'Submit'}

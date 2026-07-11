@@ -165,3 +165,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
 export function useUser() {
   return useContext(UserContext);
 }
+
+export async function updateStreak(userId: string): Promise<number> {
+  const { createClient } = await import('@/lib/supabase');
+  const supabase = createClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('streak, last_active_date')
+    .eq('id', userId)
+    .single();
+  if (!profile) return 0;
+  const lastActive = profile.last_active_date as string | null;
+  if (lastActive === today) return profile.streak as number || 0;
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const newStreak = lastActive === yesterday ? (profile.streak as number || 0) + 1 : 1;
+  await supabase.from('profiles').update({ streak: newStreak, last_active_date: today }).eq('id', userId);
+  return newStreak;
+}

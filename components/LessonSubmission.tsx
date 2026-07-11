@@ -123,6 +123,7 @@ export default function LessonSubmission({ lessonId, userId, trackColor, isCompl
       <div style={{ marginBottom: 16 }}>
         <label style={labelStyle}>Note (optional)</label>
         <textarea
+          name="submission-note"
           value={note}
           onChange={e => setNote(e.target.value)}
           rows={3}

@@ -197,14 +197,16 @@ export default function MiniProjectLesson({
           <div style={{ marginBottom: 16 }}>
             {!showSubmitForm ? (
               <button onClick={() => setShowSubmitForm(true)} style={{
-                background: 'transparent', border: `1px solid ${trackColor}`,
-                borderRadius: 20, padding: '6px 18px', fontSize: 13, fontWeight: 600,
-                color: trackColor, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-              }}>Submit for review</button>
+                background: trackColor, border: 'none',
+                borderRadius: 10, padding: '13px 0', fontSize: 15, fontWeight: 700,
+                color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                width: '100%', display: 'block', letterSpacing: '-0.01em',
+              }}>Submit Project for Review</button>
             ) : (
               <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 12, padding: '14px 16px' }}>
                 <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 8 }}>Add a note for your instructor (optional)</div>
                 <textarea
+                  name="submit-note"
                   value={submitNote}
                   onChange={e => setSubmitNote(e.target.value)}
                   placeholder="e.g. I got stuck on part 2, tried X approach..."
