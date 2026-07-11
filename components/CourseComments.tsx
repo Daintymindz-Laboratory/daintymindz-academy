@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 type Comment = {
   id: number;
@@ -21,6 +21,13 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
   const [editText, setEditText] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (replyTo !== null) {
+      setTimeout(() => replyRef.current?.focus(), 50);
+    }
+  }, [replyTo]);
 
   useEffect(() => {
     if (!courseId) return;
@@ -151,7 +158,6 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
                       value={editText}
                       onChange={e => setEditText(e.target.value)}
                       rows={2}
-                      autoFocus
                       style={{ flex: 1, background: '#1A1D21', border: `1px solid ${trackColor}60`, borderRadius: 8, padding: '8px 10px', fontSize: 13, color: '#F5F5F5', fontFamily: 'DM Sans, sans-serif', resize: 'none', outline: 'none' }}
                     />
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -185,16 +191,16 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
               <div style={{ marginLeft: 42, marginBottom: 12 }}>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <textarea
+                    ref={replyRef}
                     name="comment-reply"
                     value={replyText}
                     onChange={e => setReplyText(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) postReply(c.id); }}
                     placeholder="Write a reply..."
                     rows={2}
-                    autoFocus
                     style={{ flex: 1, background: '#1A1D21', border: `1px solid ${trackColor}40`, borderRadius: 8, padding: '8px 10px', fontSize: 13, color: '#F5F5F5', fontFamily: 'DM Sans, sans-serif', resize: 'none', outline: 'none' }}
                   />
                   <button
+                    type="button"
                     onClick={() => postReply(c.id)}
                     disabled={postingReply || !replyText.trim()}
                     style={{ background: replyText.trim() ? trackColor : '#2A2F35', border: 'none', borderRadius: 8, padding: '0 16px', fontSize: 13, fontWeight: 700, color: replyText.trim() ? '#1A1D21' : '#6B7280', cursor: (postingReply || !replyText.trim()) ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif', alignSelf: 'stretch' }}
