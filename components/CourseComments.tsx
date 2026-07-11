@@ -21,6 +21,7 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
   const [editText, setEditText] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [postError, setPostError] = useState('');
   const replyRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -53,11 +54,18 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
   const postNew = async () => {
     if (!newComment.trim() || postingNew) return;
     setPostingNew(true);
+    setPostError('');
     try {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
       const { error } = await supabase.from('course_comments').insert({ course_id: courseId, user_id: userId, parent_id: null, content: newComment.trim() });
-      if (!error) { setNewComment(''); await load(); }
+      if (error) {
+        console.error('comment insert error:', error);
+        setPostError('Could not post comment. ' + (error.message || 'Please try again.'));
+      } else {
+        setNewComment('');
+        await load();
+      }
     } finally {
       setPostingNew(false);
     }
@@ -66,11 +74,19 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
   const postReply = async (parentId: number) => {
     if (!replyText.trim() || postingReply) return;
     setPostingReply(true);
+    setPostError('');
     try {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
       const { error } = await supabase.from('course_comments').insert({ course_id: courseId, user_id: userId, parent_id: parentId, content: replyText.trim() });
-      if (!error) { setReplyText(''); setReplyTo(null); await load(); }
+      if (error) {
+        console.error('reply insert error:', error);
+        setPostError('Could not post reply. ' + (error.message || 'Please try again.'));
+      } else {
+        setReplyText('');
+        setReplyTo(null);
+        await load();
+      }
     } finally {
       setPostingReply(false);
     }
@@ -127,6 +143,12 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
           {postingNew ? '...' : 'Post'}
         </button>
       </div>
+
+      {postError && (
+        <div style={{ marginBottom: 16, padding: '8px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, fontSize: 12, color: '#FCA5A5', fontFamily: 'DM Sans, sans-serif' }}>
+          {postError}
+        </div>
+      )}
 
       {/* Comment list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
