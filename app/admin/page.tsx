@@ -55,6 +55,7 @@ type Submission = {
   submitted_at: string;
   student_name: string;
   course_title: string;
+  course_instructor: string;
   lesson_title: string;
 };
 
@@ -219,24 +220,25 @@ export default function AdminPage() {
     if (error) { console.error('loadSubmissions error:', error); return; }
     if (!data || data.length === 0) { setSubmissions([]); setPendingCount(0); return; }
 
-    const userIds = [...new Set(data.map((s: any) => s.user_id as string))];
-    const courseIds = [...new Set(data.map((s: any) => s.course_id as number))];
     const lessonIds = [...new Set(data.map((s: any) => s.lesson_id as number))];
 
     const [{ data: profilesData }, { data: coursesData }, { data: lessonsData }] = await Promise.all([
-      supabase.from('profiles').select('id, full_name').in('id', userIds),
-      supabase.from('courses').select('id, title').in('id', courseIds),
+      supabase.from('profiles').select('id, full_name'),
+      supabase.from('courses').select('id, title, created_by'),
       supabase.from('lessons').select('id, title').in('id', lessonIds),
     ]);
 
-    const profileMap: Record<string, string> = Object.fromEntries((profilesData || []).map((p: any) => [p.id, p.full_name]));
-    const courseMap: Record<number, string> = Object.fromEntries((coursesData || []).map((c: any) => [c.id, c.title]));
+    const profileMap: Record<string, string> = Object.fromEntries((profilesData || []).map((p: any) => [p.id, p.full_name || 'Unknown']));
+    const courseMap: Record<number, { title: string; instructor: string }> = Object.fromEntries(
+      (coursesData || []).map((c: any) => [c.id, { title: c.title, instructor: profileMap[c.created_by] || 'Unknown' }])
+    );
     const lessonMap: Record<number, string> = Object.fromEntries((lessonsData || []).map((l: any) => [l.id, l.title]));
 
     const mapped = data.map((s: any) => ({
       ...s,
       student_name: profileMap[s.user_id] || 'Unknown',
-      course_title: courseMap[s.course_id] || '',
+      course_title: courseMap[s.course_id]?.title || '',
+      course_instructor: courseMap[s.course_id]?.instructor || '',
       lesson_title: lessonMap[s.lesson_id] || '',
     }));
     setSubmissions(mapped);
@@ -1566,48 +1568,68 @@ export default function AdminPage() {
           )}
 
           {/* SUBMISSIONS */}
-          {activeTab === 'submissions' && (
-            <div>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// submissions'}</div>
-                <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Project Submissions</h1>
-                <p style={{ fontSize: 14, color: '#6B7280', marginTop: 4 }}>{pendingCount} pending review</p>
-              </div>
-
-              {submissions.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '4rem 0', border: '1px dashed #2A2F35', borderRadius: 20 }}>
-                  <div style={{ fontSize: 13, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace' }}>No submissions yet</div>
+          {activeTab === 'submissions' && (() => {
+            const grouped: Record<string, { instructor: string; subs: Submission[] }> = {};
+            for (const sub of submissions) {
+              const key = sub.course_title || `Course ${sub.course_id}`;
+              if (!grouped[key]) grouped[key] = { instructor: sub.course_instructor, subs: [] };
+              grouped[key].subs.push(sub);
+            }
+            return (
+              <div>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// submissions'}</div>
+                  <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Project Submissions</h1>
+                  <p style={{ fontSize: 14, color: '#6B7280', marginTop: 4 }}>{pendingCount} pending review</p>
                 </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {submissions.map(sub => (
-                    <div key={sub.id} style={{
-                      background: '#22262B', border: `1px solid ${sub.status === 'pending' ? 'rgba(213,156,16,0.3)' : sub.status === 'approved' ? 'rgba(76,175,125,0.25)' : 'rgba(248,113,113,0.25)'}`,
-                      borderRadius: 14, padding: '16px 20px',
-                      display: 'flex', alignItems: 'center', gap: 16,
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', padding: '2px 8px', borderRadius: 20, background: sub.status === 'pending' ? 'rgba(213,156,16,0.12)' : sub.status === 'approved' ? 'rgba(76,175,125,0.12)' : 'rgba(248,113,113,0.12)', color: sub.status === 'pending' ? '#D59C10' : sub.status === 'approved' ? '#4CAF7D' : '#F87171' }}>
-                            {sub.status.toUpperCase()}
-                          </span>
-                          <span style={{ fontSize: 11, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace' }}>{sub.lesson_type}</span>
+
+                {submissions.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '4rem 0', border: '1px dashed #2A2F35', borderRadius: 20 }}>
+                    <div style={{ fontSize: 13, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace' }}>No submissions yet</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    {Object.entries(grouped).map(([courseTitle, { instructor, subs }]) => (
+                      <div key={courseTitle}>
+                        <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #2A2F35' }}>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: '#F5F5F5' }}>{courseTitle}</div>
+                          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>
+                            Instructor: <span style={{ color: '#9CA3AF' }}>{instructor}</span>
+                            <span style={{ marginLeft: 12, fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#3A3F46' }}>{subs.length} submission{subs.length !== 1 ? 's' : ''}</span>
+                          </div>
                         </div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#F5F5F5', marginBottom: 2 }}>{sub.student_name}</div>
-                        <div style={{ fontSize: 12, color: '#6B7280' }}>{sub.course_title} &rsaquo; {sub.lesson_title}</div>
-                        <div style={{ fontSize: 11, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', marginTop: 4 }}>
-                          {new Date(sub.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {subs.map(sub => (
+                            <div key={sub.id} style={{
+                              background: '#22262B', border: `1px solid ${sub.status === 'pending' ? 'rgba(213,156,16,0.3)' : sub.status === 'approved' ? 'rgba(76,175,125,0.25)' : 'rgba(248,113,113,0.25)'}`,
+                              borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16,
+                            }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                                  <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', padding: '2px 8px', borderRadius: 20, background: sub.status === 'pending' ? 'rgba(213,156,16,0.12)' : sub.status === 'approved' ? 'rgba(76,175,125,0.12)' : 'rgba(248,113,113,0.12)', color: sub.status === 'pending' ? '#D59C10' : sub.status === 'approved' ? '#4CAF7D' : '#F87171' }}>
+                                    {sub.status.toUpperCase()}
+                                  </span>
+                                  <span style={{ fontSize: 11, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace' }}>{sub.lesson_type}</span>
+                                </div>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: '#F5F5F5', marginBottom: 2 }}>{sub.student_name}</div>
+                                <div style={{ fontSize: 12, color: '#6B7280' }}>{sub.lesson_title}</div>
+                                <div style={{ fontSize: 11, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', marginTop: 3 }}>
+                                  {new Date(sub.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                              </div>
+                              <button onClick={() => { setSelectedSubmission(sub); setGradingFeedback(sub.feedback || ''); }} style={{ background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 20, padding: '7px 18px', fontSize: 13, color: '#F5F5F5', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                {sub.status === 'pending' ? 'Review' : 'View'}
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                      <button onClick={() => { setSelectedSubmission(sub); setGradingFeedback(sub.feedback || ''); }} style={{ background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 20, padding: '7px 18px', fontSize: 13, color: '#F5F5F5', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        Review
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
         </main>
       </div>
@@ -1649,13 +1671,22 @@ export default function AdminPage() {
                 />
               </div>
 
+              {selectedSubmission.status !== 'pending' && (
+                <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 16, background: selectedSubmission.status === 'approved' ? 'rgba(76,175,125,0.08)' : 'rgba(248,113,113,0.08)', border: `1px solid ${selectedSubmission.status === 'approved' ? 'rgba(76,175,125,0.3)' : 'rgba(248,113,113,0.3)'}`, fontSize: 13, color: selectedSubmission.status === 'approved' ? '#4CAF7D' : '#F87171', fontWeight: 600 }}>
+                  {selectedSubmission.status === 'approved' ? 'Already approved' : 'Already returned for rework'}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => gradeSubmission('approved')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: 'none', background: grading ? '#22262B' : '#4CAF7D', color: grading ? '#6B7280' : '#1A1D21', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                  {grading ? 'Saving...' : 'Approve'}
-                </button>
-                <button onClick={() => gradeSubmission('rework')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#F87171', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                  Return for Rework
-                </button>
+                {selectedSubmission.status !== 'approved' && (
+                  <button onClick={() => gradeSubmission('approved')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: 'none', background: grading ? '#22262B' : '#4CAF7D', color: grading ? '#6B7280' : '#1A1D21', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                    {grading ? 'Saving...' : 'Approve'}
+                  </button>
+                )}
+                {selectedSubmission.status !== 'rework' && (
+                  <button onClick={() => gradeSubmission('rework')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#F87171', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                    Return for Rework
+                  </button>
+                )}
               </div>
             </div>
           </div>
