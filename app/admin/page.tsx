@@ -3,6 +3,9 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { FALLBACK_TRACKS as BASE_FALLBACK_TRACKS } from '@/lib/user-context';
+import { notify } from '@/lib/notify';
+import NotificationBell from '@/components/NotificationBell';
+import MessageCenter from '@/components/MessageCenter';
 
 const MDEditor = dynamic(() => import('@uiw/react-md-editor'), { ssr: false });
 
@@ -91,7 +94,7 @@ export default function AdminPage() {
   const [adminProfileSaving, setAdminProfileSaving] = useState(false);
   const [adminProfiles, setAdminProfiles] = useState<{ id: string; full_name: string; position: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'submissions'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'submissions' | 'messages'>('courses');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [tracks, setTracks] = useState<Track[]>(Object.entries(FALLBACK_TRACKS).map(([code, t]) => ({ code, ...t })));
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
@@ -260,6 +263,11 @@ export default function AdminPage() {
         { user_id: selectedSubmission.user_id, course_id: selectedSubmission.course_id, lesson_id: selectedSubmission.lesson_id, completed: true },
         { onConflict: 'user_id,course_id' }
       );
+    }
+    if (status === 'approved') {
+      notify({ userId: selectedSubmission.user_id, type: 'submission_approved', title: 'Submission approved!', message: `Your project for "${selectedSubmission.lesson_title}" has been approved. Great work!`, link: `/lesson/${selectedSubmission.course_id}/${selectedSubmission.lesson_id}` });
+    } else {
+      notify({ userId: selectedSubmission.user_id, type: 'submission_rework', title: 'Submission needs rework', message: `Your project for "${selectedSubmission.lesson_title}" needs some changes. Feedback: ${gradingFeedback.trim()}`, link: `/lesson/${selectedSubmission.course_id}/${selectedSubmission.lesson_id}` });
     }
     await loadSubmissions(supabase);
     setSelectedSubmission(null);
@@ -640,6 +648,7 @@ export default function AdminPage() {
         }}>ADMIN</div>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 13, color: '#6B7280' }}>{adminName}</span>
+        {adminId && <NotificationBell userId={adminId} />}
         <a href="/dashboard" style={{
           fontSize: 13, color: '#6B7280', textDecoration: 'none',
           border: '1px solid #2A2F35', borderRadius: 20, padding: '5px 14px',
@@ -662,6 +671,7 @@ export default function AdminPage() {
               { id: 'analytics', label: 'Analytics', icon: '◈' },
               { id: 'tracks', label: 'Tracks', icon: '◑' },
               { id: 'submissions', label: 'Submissions', icon: '◧' },
+              { id: 'messages', label: 'Messages', icon: '✉' },
             ].map(item => (
               <div key={item.id} onClick={() => setActiveTab(item.id as any)} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
@@ -1689,6 +1699,20 @@ export default function AdminPage() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Messages tab content -- rendered inline in main, shown via activeTab */}
+      {activeTab === 'messages' && adminId && (
+        <div style={{ position: 'fixed', inset: 0, top: 56, left: 240, padding: '2rem', background: '#1A1D21', zIndex: 10, overflowY: 'auto' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// messages'}</div>
+            <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Messages</h1>
+            <p style={{ fontSize: 14, color: '#6B7280', marginTop: 4 }}>Direct messages with students</p>
+          </div>
+          <div style={{ height: 'calc(100vh - 200px)' }}>
+            <MessageCenter userId={adminId} isAdmin={true} trackColor="#D59C10" />
           </div>
         </div>
       )}

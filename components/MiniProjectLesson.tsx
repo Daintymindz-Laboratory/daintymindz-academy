@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { createRunnerWorker, runTestCases, type Language } from '@/lib/codeRunner';
+import { notify } from '@/lib/notify';
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -140,6 +141,7 @@ export default function MiniProjectLesson({
       setSubmission(data);
       setShowSubmitForm(false);
       setSubmitNote('');
+      notify({ adminBroadcast: true, type: 'project_submitted', title: 'New project submission', message: 'A student submitted a mini project for review.', link: '/admin' });
     }
     setSubmitting(false);
   };

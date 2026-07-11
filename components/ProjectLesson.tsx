@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import ReactMarkdown from 'react-markdown';
 import { createRunnerWorker, runOneTest, runTestCases, type Language } from '@/lib/codeRunner';
 import LessonSubmission from '@/components/LessonSubmission';
+import { notify } from '@/lib/notify';
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -150,6 +151,7 @@ export default function ProjectLesson({
       setSubmission(data);
       setShowSubmitForm(false);
       setSubmitNote('');
+      notify({ adminBroadcast: true, type: 'project_submitted', title: 'New project submission', message: 'A student submitted a project for review.', link: '/admin' });
     }
     setSubmitting(false);
   };

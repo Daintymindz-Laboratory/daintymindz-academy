@@ -8,6 +8,10 @@ import MiniProjectLesson from '@/components/MiniProjectLesson';
 import ProjectLesson from '@/components/ProjectLesson';
 import LessonSubmission from '@/components/LessonSubmission';
 import { useUser, updateStreak } from '@/lib/user-context';
+import { notify } from '@/lib/notify';
+import NotificationBell from '@/components/NotificationBell';
+import CourseComments from '@/components/CourseComments';
+import MessageCenter from '@/components/MessageCenter';
 
 
 type Lesson = {
@@ -201,6 +205,8 @@ export default function LessonPage() {
     if (newCompleted.length === lessons.length) {
       const certId = `CERT-DM-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
       await supabase.from('certificates').insert({ user_id: userId, course_id: parseInt(courseId), cert_id: certId });
+      notify({ userId, type: 'course_completed', title: 'Course completed!', message: `Congratulations! You completed "${course?.title}" and earned a certificate.`, link: '/certificates' });
+      notify({ adminBroadcast: true, type: 'course_completed', title: 'Student completed a course', message: `A student completed "${course?.title}".`, link: '/admin' });
       window.location.href = '/certificates';
     } else {
       // Gated lesson types (quiz, mini_project) stay on the current lesson
@@ -271,6 +277,7 @@ export default function LessonPage() {
           borderRadius: 20, padding: '5px 14px', color: notesOpen ? '#D59C10' : '#6B7280',
           fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
         }}>Notes</button>
+        <NotificationBell userId={userId} />
         <a href="/dashboard" style={{ color: '#6B7280', fontSize: 13, textDecoration: 'none', border: '1px solid #2A2F35', borderRadius: 20, padding: '5px 14px' }}>Dashboard</a>
       </nav>
 
@@ -412,6 +419,39 @@ export default function LessonPage() {
               color: '#E5E7EB', lineHeight: 1.7, resize: 'none',
             }}
           />
+        </div>
+      )}
+
+      {/* Discussion + Messages drawer */}
+      {course && userId && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50 }}>
+          <DiscussionDrawer courseId={course.id} userId={userId} trackColor={trackColor} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiscussionDrawer({ courseId, userId, trackColor }: { courseId: number; userId: string; trackColor: string }) {
+  const [tab, setTab] = useState<'comments' | 'messages'>('comments');
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ background: '#1A1D21', borderTop: '1px solid #2A2F35', boxShadow: '0 -4px 24px rgba(0,0,0,0.4)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0 20px', borderBottom: open ? '1px solid #2A2F35' : 'none' }}>
+        {(['comments', 'messages'] as const).map(t => (
+          <button key={t} onClick={() => { setTab(t); setOpen(true); }} style={{ background: 'none', border: 'none', borderBottom: open && tab === t ? `2px solid ${trackColor}` : '2px solid transparent', padding: '10px 16px', fontSize: 13, fontWeight: 600, color: open && tab === t ? trackColor : '#6B7280', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', marginBottom: -1 }}>
+            {t === 'comments' ? 'Discussion' : 'Messages'}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        <button onClick={() => setOpen(o => !o)} style={{ background: 'none', border: 'none', color: '#6B7280', cursor: 'pointer', fontSize: 18, padding: '8px', fontFamily: 'DM Sans, sans-serif' }}>
+          {open ? 'v' : '^'}
+        </button>
+      </div>
+      {open && (
+        <div style={{ height: 400, overflowY: 'auto', padding: tab === 'comments' ? '20px 24px' : '0' }}>
+          {tab === 'comments' && <CourseComments courseId={courseId} userId={userId} trackColor={trackColor} />}
+          {tab === 'messages' && <MessageCenter userId={userId} isAdmin={false} trackColor={trackColor} />}
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useUser } from '@/lib/user-context';
+import NotificationBell from '@/components/NotificationBell';
 
 import type { TracksMap } from '@/lib/user-context';
 
@@ -331,6 +332,8 @@ export default function Dashboard() {
           <span style={{ fontSize: 14 }}>🔥</span>
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#D59C10' }}>{user.streak} {user.streak === 1 ? 'day' : 'days'} streak</span>
         </div>
+
+        <NotificationBell userId={authUserId} />
 
         {/* Avatar */}
         <div onClick={() => setProfileOpen(true)} style={{
