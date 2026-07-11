@@ -19,7 +19,7 @@ type Contact = {
   lastAt: string;
 };
 
-export default function MessageCenter({ userId, isAdmin, trackColor }: { userId: string; isAdmin: boolean; trackColor?: string }) {
+export default function MessageCenter({ userId, isAdmin, trackColor, instructorId }: { userId: string; isAdmin: boolean; trackColor?: string; instructorId?: string }) {
   const color = trackColor || '#D59C10';
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export default function MessageCenter({ userId, isAdmin, trackColor }: { userId:
   useEffect(() => {
     if (!userId) return;
     loadContacts();
-    if (!isAdmin) loadAdmins();
+    if (!isAdmin) loadInstructors();
   }, [userId]);
 
   useEffect(() => {
@@ -43,11 +43,16 @@ export default function MessageCenter({ userId, isAdmin, trackColor }: { userId:
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [thread]);
 
-  const loadAdmins = async () => {
+  const loadInstructors = async () => {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
-    const { data } = await supabase.from('profiles').select('id, full_name').eq('is_admin', true);
-    setAdmins((data || []).map((p: any) => ({ id: p.id, name: p.full_name || 'Instructor' })));
+    if (instructorId) {
+      const { data } = await supabase.from('profiles').select('id, full_name').eq('id', instructorId).single();
+      if (data) setAdmins([{ id: data.id, name: data.full_name || 'Instructor' }]);
+    } else {
+      const { data } = await supabase.from('profiles').select('id, full_name').eq('is_admin', true);
+      setAdmins((data || []).map((p: any) => ({ id: p.id, name: p.full_name || 'Instructor' })));
+    }
   };
 
   const loadContacts = async () => {

@@ -49,3 +49,21 @@ ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "messages: participants read" ON messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = recipient_id);
 CREATE POLICY "messages: own send"          ON messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
 CREATE POLICY "messages: recipient update"  ON messages FOR UPDATE USING (auth.uid() = recipient_id);
+
+-- Course ratings (one per student per course)
+CREATE TABLE IF NOT EXISTS course_ratings (
+  id bigint generated always as identity primary key,
+  course_id bigint references courses(id) on delete cascade not null,
+  user_id uuid references auth.users not null,
+  rating smallint not null check (rating between 1 and 5),
+  comment text,
+  created_at timestamptz default now(),
+  UNIQUE (course_id, user_id)
+);
+ALTER TABLE course_ratings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "ratings: own read"   ON course_ratings FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "ratings: own upsert" ON course_ratings FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "ratings: own update" ON course_ratings FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "ratings: admin read" ON course_ratings FOR SELECT USING (
+  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND is_admin = true)
+);

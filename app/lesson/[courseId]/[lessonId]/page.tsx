@@ -12,6 +12,7 @@ import { notify } from '@/lib/notify';
 import NotificationBell from '@/components/NotificationBell';
 import CourseComments from '@/components/CourseComments';
 import MessageCenter from '@/components/MessageCenter';
+import CourseRating from '@/components/CourseRating';
 
 
 type Lesson = {
@@ -35,6 +36,7 @@ type Course = {
   title: string;
   track: string;
   level: string;
+  created_by?: string;
 };
 
 const TRACK_FALLBACK = { color: '#6B7280' };
@@ -68,6 +70,7 @@ export default function LessonPage() {
   const [userId, setUserId] = useState('');
   const [loading, setLoading] = useState(true);
   const { tracks, setUser } = useUser();
+  const [showRating, setShowRating] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('dm-sidebar-collapsed') === '1';
@@ -207,7 +210,7 @@ export default function LessonPage() {
       await supabase.from('certificates').insert({ user_id: userId, course_id: parseInt(courseId), cert_id: certId });
       notify({ userId, type: 'course_completed', title: 'Course completed!', message: `Congratulations! You completed "${course?.title}" and earned a certificate.`, link: '/certificates' });
       notify({ adminBroadcast: true, type: 'course_completed', title: 'Student completed a course', message: `A student completed "${course?.title}".`, link: '/admin' });
-      window.location.href = '/certificates';
+      setShowRating(true);
     } else {
       // Gated lesson types (quiz, mini_project) stay on the current lesson
       // after passing so the student can review their work. The Next button
@@ -425,14 +428,24 @@ export default function LessonPage() {
       {/* Discussion + Messages drawer */}
       {course && userId && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50 }}>
-          <DiscussionDrawer courseId={course.id} userId={userId} trackColor={trackColor} />
+          <DiscussionDrawer courseId={course.id} userId={userId} trackColor={trackColor} instructorId={course.created_by} />
         </div>
+      )}
+
+      {showRating && course && userId && (
+        <CourseRating
+          courseId={course.id}
+          userId={userId}
+          courseTitle={course.title}
+          trackColor={trackColor}
+          onDone={() => { setShowRating(false); window.location.href = '/certificates'; }}
+        />
       )}
     </div>
   );
 }
 
-function DiscussionDrawer({ courseId, userId, trackColor }: { courseId: number; userId: string; trackColor: string }) {
+function DiscussionDrawer({ courseId, userId, trackColor, instructorId }: { courseId: number; userId: string; trackColor: string; instructorId?: string }) {
   const [tab, setTab] = useState<'comments' | 'messages'>('comments');
   const [open, setOpen] = useState(false);
   return (
@@ -451,7 +464,7 @@ function DiscussionDrawer({ courseId, userId, trackColor }: { courseId: number; 
       {open && (
         <div style={{ height: 400, overflowY: 'auto', padding: tab === 'comments' ? '20px 24px' : '0' }}>
           {tab === 'comments' && <CourseComments courseId={courseId} userId={userId} trackColor={trackColor} />}
-          {tab === 'messages' && <MessageCenter userId={userId} isAdmin={false} trackColor={trackColor} />}
+          {tab === 'messages' && <MessageCenter userId={userId} isAdmin={false} trackColor={trackColor} instructorId={instructorId} />}
         </div>
       )}
     </div>
