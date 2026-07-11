@@ -16,6 +16,8 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
   const [replyTo, setReplyTo] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
   const [posting, setPosting] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
 
   useEffect(() => {
     if (!courseId) return;
@@ -51,9 +53,26 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
     setPosting(false);
   };
 
+  const saveEdit = async (id: number) => {
+    if (!editText.trim()) return;
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    await supabase.from('course_comments').update({ content: editText.trim() }).eq('id', id);
+    setEditingId(null);
+    setEditText('');
+    await load();
+  };
+
+  const deleteComment = async (id: number) => {
+    if (!confirm('Delete this comment?')) return;
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    await supabase.from('course_comments').delete().eq('id', id);
+    await load();
+  };
+
   const topLevel = comments.filter(c => !c.parent_id);
   const replies = (parentId: number) => comments.filter(c => c.parent_id === parentId);
-
   const avatar = (name: string) => name.slice(0, 1).toUpperCase();
 
   const CommentItem = ({ c, depth = 0 }: { c: Comment; depth?: number }) => (
@@ -66,9 +85,33 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
             <span style={{ fontSize: 11, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace' }}>
               {new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </span>
+            {c.user_id === userId && (
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                <button onClick={() => { setEditingId(c.id); setEditText(c.content); }} style={{ background: 'none', border: 'none', fontSize: 11, color: '#6B7280', cursor: 'pointer', padding: 0, fontFamily: 'DM Sans, sans-serif' }}>Edit</button>
+                <button onClick={() => deleteComment(c.id)} style={{ background: 'none', border: 'none', fontSize: 11, color: '#EF4444', cursor: 'pointer', padding: 0, fontFamily: 'DM Sans, sans-serif' }}>Delete</button>
+              </div>
+            )}
           </div>
-          <p style={{ margin: '0 0 6px', fontSize: 13, color: '#9CA3AF', lineHeight: 1.6 }}>{c.content}</p>
-          {depth === 0 && (
+
+          {editingId === c.id ? (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <textarea
+                name="edit-comment"
+                value={editText}
+                onChange={e => setEditText(e.target.value)}
+                rows={2}
+                style={{ flex: 1, background: '#1A1D21', border: `1px solid ${trackColor}60`, borderRadius: 8, padding: '8px 10px', fontSize: 13, color: '#F5F5F5', fontFamily: 'DM Sans, sans-serif', resize: 'none', outline: 'none' }}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <button onClick={() => saveEdit(c.id)} style={{ background: trackColor, border: 'none', borderRadius: 6, padding: '4px 12px', fontSize: 12, fontWeight: 700, color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>Save</button>
+                <button onClick={() => setEditingId(null)} style={{ background: 'none', border: '1px solid #2A2F35', borderRadius: 6, padding: '4px 12px', fontSize: 12, color: '#6B7280', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <p style={{ margin: '0 0 6px', fontSize: 13, color: '#9CA3AF', lineHeight: 1.6 }}>{c.content}</p>
+          )}
+
+          {depth === 0 && editingId !== c.id && (
             <button onClick={() => setReplyTo(replyTo === c.id ? null : c.id)} style={{ background: 'none', border: 'none', fontSize: 12, color: '#6B7280', cursor: 'pointer', padding: 0, fontFamily: 'DM Sans, sans-serif' }}>
               {replyTo === c.id ? 'Cancel' : 'Reply'}
             </button>
