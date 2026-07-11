@@ -284,6 +284,7 @@ export default function LessonPage() {
         <a href="/dashboard" style={{ color: '#6B7280', fontSize: 13, textDecoration: 'none', border: '1px solid #2A2F35', borderRadius: 20, padding: '5px 14px' }}>Dashboard</a>
       </nav>
 
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <div className={`dm-sidebar-backdrop${sidebarOpen ? ' open' : ''}`} onClick={() => setSidebarOpen(false)} />
         <aside className={`dm-lesson-sidebar${sidebarOpen ? ' open' : ''}${sidebarCollapsed ? ' dm-collapsed' : ''}`}>
@@ -394,6 +395,12 @@ export default function LessonPage() {
         )}
       </div>
 
+      {/* Discussion + Messages drawer */}
+      {course && userId && (
+        <DiscussionDrawer courseId={course.id} userId={userId} trackColor={trackColor} instructorId={course.created_by} />
+      )}
+      </div>
+
       {/* Notes panel */}
       {notesOpen && (
         <div style={{
@@ -422,13 +429,6 @@ export default function LessonPage() {
               color: '#E5E7EB', lineHeight: 1.7, resize: 'none',
             }}
           />
-        </div>
-      )}
-
-      {/* Discussion + Messages drawer */}
-      {course && userId && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50 }}>
-          <DiscussionDrawer courseId={course.id} userId={userId} trackColor={trackColor} instructorId={course.created_by} />
         </div>
       )}
 
