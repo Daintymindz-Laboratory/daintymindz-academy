@@ -181,8 +181,13 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
                       <div style={{ padding: '9px 14px', borderRadius: mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background: mine ? color : '#1A1D21', color: mine ? '#1A1D21' : '#F5F5F5', fontSize: 13, lineHeight: 1.5, fontWeight: mine ? 500 : 400 }}>
                         {m.content}
                       </div>
-                      <div style={{ fontSize: 10, color: '#3A3F46', marginTop: 3, textAlign: mine ? 'right' : 'left', fontFamily: 'JetBrains Mono, monospace' }}>
+                      <div style={{ fontSize: 10, color: '#3A3F46', marginTop: 3, textAlign: mine ? 'right' : 'left', fontFamily: 'JetBrains Mono, monospace', display: 'flex', alignItems: 'center', justifyContent: mine ? 'flex-end' : 'flex-start', gap: 4 }}>
                         {new Date(m.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        {mine && (
+                          <span style={{ color: m.read ? '#4E8FD4' : '#6B7280', fontSize: 12, letterSpacing: '-3px', lineHeight: 1 }}>
+                            {m.read ? '✓✓' : '✓'}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
