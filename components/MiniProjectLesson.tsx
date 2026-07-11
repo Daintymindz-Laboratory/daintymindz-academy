@@ -20,8 +20,18 @@ interface TestResult {
   error?: string;
 }
 
+type SubmissionStatus = 'pending' | 'approved' | 'rework';
+
+interface Submission {
+  id: number;
+  status: SubmissionStatus;
+  feedback: string | null;
+  submitted_at: string;
+}
+
 interface Props {
   lessonId: number;
+  courseId: number;
   userId: string;
   trackColor: string;
   starterCode: string;
@@ -32,7 +42,7 @@ interface Props {
 }
 
 export default function MiniProjectLesson({
-  lessonId, userId, trackColor, starterCode, instructions, language = 'python', isCompleted, onComplete,
+  lessonId, courseId, userId, trackColor, starterCode, instructions, language = 'python', isCompleted, onComplete,
 }: Props) {
   const storageKey = `dm_mp_code_${lessonId}`;
   const defaultSnippet = language === 'python' ? '# Write your solution here\n' : '// Write your solution here\n';
@@ -45,6 +55,10 @@ export default function MiniProjectLesson({
   const [results, setResults] = useState<TestResult[]>([]);
   const [runnerReady, setRunnerReady] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [submission, setSubmission] = useState<Submission | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitNote, setSubmitNote] = useState('');
+  const [showSubmitForm, setShowSubmitForm] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const runIdRef = useRef(0);
 
@@ -57,12 +71,13 @@ export default function MiniProjectLesson({
     const load = async () => {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
-      const [{ data: tcData }, { data: resultData }] = await Promise.all([
+      const [{ data: tcData }, { data: resultData }, { data: subData }] = await Promise.all([
         supabase.from('mini_project_test_cases').select('*').eq('lesson_id', lessonId).order('order_index'),
         supabase.from('mini_project_results').select('submitted_code').eq('lesson_id', lessonId).eq('user_id', userId).maybeSingle(),
+        supabase.from('project_submissions').select('id, status, feedback, submitted_at').eq('lesson_id', lessonId).eq('user_id', userId).order('submitted_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       setTestCases(tcData || []);
-      // If there is a saved submission, restore it (takes precedence over localStorage).
+      if (subData) setSubmission(subData);
       if (resultData?.submitted_code) {
         setCode(resultData.submitted_code);
         try { localStorage.setItem(storageKey, resultData.submitted_code); } catch { /* ignore */ }
@@ -112,6 +127,23 @@ export default function MiniProjectLesson({
   const allPassed = results.length > 0 && results.every(r => r.passed);
   const passCount = results.filter(r => r.passed).length;
 
+  const submitForReview = async () => {
+    setSubmitting(true);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { data, error } = await supabase.from('project_submissions').insert({
+      user_id: userId, lesson_id: lessonId, course_id: courseId,
+      lesson_type: 'mini_project', submitted_code: code,
+      notes: submitNote.trim() || null, status: 'pending',
+    }).select('id, status, feedback, submitted_at').single();
+    if (!error && data) {
+      setSubmission(data);
+      setShowSubmitForm(false);
+      setSubmitNote('');
+    }
+    setSubmitting(false);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
@@ -137,6 +169,66 @@ export default function MiniProjectLesson({
               <div style={{ fontSize: 14, fontWeight: 700, color: '#4CAF7D' }}>All tests passed!</div>
               <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>Click <strong style={{ color: '#F5F5F5' }}>Next</strong> in the toolbar to continue.</div>
             </div>
+          </div>
+        )}
+
+        {submission && (
+          <div style={{
+            padding: '12px 16px', borderRadius: 12, marginBottom: 16,
+            background: submission.status === 'approved' ? 'rgba(76,175,125,0.08)' : submission.status === 'rework' ? 'rgba(248,113,113,0.08)' : 'rgba(213,156,16,0.08)',
+            border: `1px solid ${submission.status === 'approved' ? 'rgba(76,175,125,0.3)' : submission.status === 'rework' ? 'rgba(248,113,113,0.3)' : 'rgba(213,156,16,0.3)'}`,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: submission.feedback ? 6 : 0 }}>
+              <span style={{ fontSize: 16 }}>{submission.status === 'approved' ? '✓' : submission.status === 'rework' ? '↩' : '⏳'}</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: submission.status === 'approved' ? '#4CAF7D' : submission.status === 'rework' ? '#F87171' : '#D59C10' }}>
+                {submission.status === 'approved' ? 'Submission approved!' : submission.status === 'rework' ? 'Needs rework' : 'Submitted for review'}
+              </span>
+            </div>
+            {submission.feedback && (
+              <div style={{ fontSize: 13, color: '#9CA3AF', marginTop: 4, paddingLeft: 24 }}>
+                <span style={{ color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Instructor feedback: </span>
+                {submission.feedback}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!submission && (
+          <div style={{ marginBottom: 16 }}>
+            {!showSubmitForm ? (
+              <button onClick={() => setShowSubmitForm(true)} style={{
+                background: 'transparent', border: `1px solid ${trackColor}`,
+                borderRadius: 20, padding: '6px 18px', fontSize: 13, fontWeight: 600,
+                color: trackColor, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+              }}>Submit for review</button>
+            ) : (
+              <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 12, padding: '14px 16px' }}>
+                <div style={{ fontSize: 13, color: '#9CA3AF', marginBottom: 8 }}>Add a note for your instructor (optional)</div>
+                <textarea
+                  value={submitNote}
+                  onChange={e => setSubmitNote(e.target.value)}
+                  placeholder="e.g. I got stuck on part 2, tried X approach..."
+                  rows={3}
+                  style={{ width: '100%', background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 8, padding: '8px 10px', fontSize: 13, color: '#F5F5F5', fontFamily: 'DM Sans, sans-serif', resize: 'vertical', boxSizing: 'border-box' }}
+                />
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <button onClick={submitForReview} disabled={submitting} style={{ background: trackColor, border: 'none', borderRadius: 20, padding: '6px 20px', fontSize: 13, fontWeight: 700, color: '#1A1D21', cursor: submitting ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                    {submitting ? 'Submitting...' : 'Submit'}
+                  </button>
+                  <button onClick={() => setShowSubmitForm(false)} style={{ background: 'transparent', border: '1px solid #3A3F46', borderRadius: 20, padding: '6px 16px', fontSize: 13, color: '#6B7280', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {submission?.status === 'rework' && (
+          <div style={{ marginBottom: 16 }}>
+            <button onClick={() => { setSubmission(null); setShowSubmitForm(true); }} style={{
+              background: 'transparent', border: '1px solid #F87171',
+              borderRadius: 20, padding: '6px 18px', fontSize: 13, fontWeight: 600,
+              color: '#F87171', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+            }}>Resubmit</button>
           </div>
         )}
 

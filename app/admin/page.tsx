@@ -46,15 +46,16 @@ type Submission = {
   id: number;
   user_id: string;
   lesson_id: number;
-  submission_url: string;
-  note: string | null;
-  status: 'pending' | 'approved' | 'rejected';
+  course_id: number;
+  lesson_type: string;
+  submitted_code: string;
+  notes: string | null;
+  status: 'pending' | 'approved' | 'rework';
   feedback: string | null;
-  created_at: string;
-  studentName: string;
-  studentEmail: string;
-  lessonTitle: string;
-  courseTitle: string;
+  submitted_at: string;
+  student_name: string;
+  course_title: string;
+  lesson_title: string;
 };
 
 const FALLBACK_TRACKS: Record<string, { label: string; color: string }> = Object.fromEntries(
@@ -89,11 +90,8 @@ export default function AdminPage() {
   const [adminProfileSaving, setAdminProfileSaving] = useState(false);
   const [adminProfiles, setAdminProfiles] = useState<{ id: string; full_name: string; position: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'reviews'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'submissions'>('courses');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [reviewingId, setReviewingId] = useState<number | null>(null);
-  const [reviewFeedback, setReviewFeedback] = useState('');
-  const [savingReview, setSavingReview] = useState(false);
   const [tracks, setTracks] = useState<Track[]>(Object.entries(FALLBACK_TRACKS).map(([code, t]) => ({ code, ...t })));
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
   const [savingTrack, setSavingTrack] = useState(false);
@@ -142,6 +140,10 @@ export default function AdminPage() {
     expected_output: string;
   };
 
+  const [pendingCount, setPendingCount] = useState(0);
+  const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
+  const [gradingFeedback, setGradingFeedback] = useState('');
+  const [grading, setGrading] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [editingQuestion, setEditingQuestion] = useState<QuizQuestion | null>(null);
   const [savingQuestion, setSavingQuestion] = useState(false);
@@ -209,6 +211,46 @@ export default function AdminPage() {
     showToast('Track deleted.');
   };
 
+  const loadSubmissions = async (supabase: any) => {
+    const { data } = await supabase
+      .from('project_submissions')
+      .select('*, profiles(full_name), courses(title), lessons(title)')
+      .order('submitted_at', { ascending: false });
+    if (data) {
+      const mapped = data.map((s: any) => ({
+        ...s,
+        student_name: s.profiles?.full_name || 'Unknown',
+        course_title: s.courses?.title || '',
+        lesson_title: s.lessons?.title || '',
+      }));
+      setSubmissions(mapped);
+      setPendingCount(mapped.filter((s: any) => s.status === 'pending').length);
+    }
+  };
+
+  const gradeSubmission = async (status: 'approved' | 'rework') => {
+    if (!selectedSubmission) return;
+    if (status === 'rework' && !gradingFeedback.trim()) { showToast('Please add feedback before returning for rework.'); return; }
+    setGrading(true);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { error } = await supabase.from('project_submissions')
+      .update({ status, feedback: gradingFeedback.trim() || null, reviewed_at: new Date().toISOString(), reviewed_by: adminId })
+      .eq('id', selectedSubmission.id);
+    if (error) { showToast(`Error: ${error.message}`); setGrading(false); return; }
+    if (status === 'approved') {
+      await supabase.from('progress').upsert(
+        { user_id: selectedSubmission.user_id, course_id: selectedSubmission.course_id, lesson_id: selectedSubmission.lesson_id, completed: true },
+        { onConflict: 'user_id,course_id' }
+      );
+    }
+    await loadSubmissions(supabase);
+    setSelectedSubmission(null);
+    setGradingFeedback('');
+    setGrading(false);
+    showToast(status === 'approved' ? 'Submission approved!' : 'Returned for rework.');
+  };
+
   const loadCourses = async (supabase: any) => {
     const { data } = await supabase.from('courses').select('*').order('id');
     if (data) setCourses(data);
@@ -217,52 +259,6 @@ export default function AdminPage() {
   const loadStudents = async (supabase: any) => {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (data) setStudents(data);
-  };
-
-  const loadSubmissions = async (supabase: any) => {
-    const { data: subs } = await supabase.from('lesson_submissions').select('*').order('created_at', { ascending: false });
-    if (!subs || subs.length === 0) { setSubmissions([]); return; }
-    const userIds = Array.from(new Set(subs.map((s: any) => s.user_id)));
-    const lessonIds = Array.from(new Set(subs.map((s: any) => s.lesson_id)));
-    const [{ data: profilesData }, { data: lessonsData }] = await Promise.all([
-      supabase.from('profiles').select('id, full_name, email').in('id', userIds),
-      supabase.from('lessons').select('id, title, course_id').in('id', lessonIds),
-    ]);
-    const profileMap: Record<string, { full_name: string; email: string }> = {};
-    (profilesData || []).forEach((p: any) => { profileMap[p.id] = p; });
-    const lessonMap: Record<number, { title: string; course_id: number }> = {};
-    (lessonsData || []).forEach((l: any) => { lessonMap[l.id] = l; });
-    const courseIds = Array.from(new Set(Object.values(lessonMap).map((l: any) => l.course_id)));
-    const { data: coursesData } = courseIds.length
-      ? await supabase.from('courses').select('id, title').in('id', courseIds)
-      : { data: [] };
-    const courseMap: Record<number, string> = {};
-    (coursesData || []).forEach((c: any) => { courseMap[c.id] = c.title; });
-    const enriched: Submission[] = subs
-      .map((s: any) => ({
-        ...s,
-        studentName: profileMap[s.user_id]?.full_name || 'Unknown',
-        studentEmail: profileMap[s.user_id]?.email || '',
-        lessonTitle: lessonMap[s.lesson_id]?.title || '',
-        courseTitle: courseMap[lessonMap[s.lesson_id]?.course_id] || '',
-      }))
-      .sort((a: Submission, b: Submission) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1));
-    setSubmissions(enriched);
-  };
-
-  const reviewSubmission = async (id: number, status: 'approved' | 'rejected') => {
-    setSavingReview(true);
-    const { createClient } = await import('@/lib/supabase');
-    const supabase = createClient();
-    const { error } = await supabase.from('lesson_submissions').update({
-      status, feedback: reviewFeedback.trim() || null, reviewed_by: adminId, reviewed_at: new Date().toISOString(),
-    }).eq('id', id);
-    if (error) { showToast(`Error: ${error.message}`); setSavingReview(false); return; }
-    await loadSubmissions(supabase);
-    setReviewingId(null);
-    setReviewFeedback('');
-    setSavingReview(false);
-    showToast(status === 'approved' ? 'Submission approved.' : 'Submission rejected.');
   };
 
   const loadAnalytics = async (supabase: any) => {
@@ -645,10 +641,10 @@ export default function AdminPage() {
             {[
               { id: 'courses', label: 'Course Manager', icon: '◎' },
               { id: 'lessons', label: 'Lesson Builder', icon: '✦' },
-              { id: 'reviews', label: 'Reviews', icon: '☑' },
               { id: 'students', label: 'Students', icon: '⊞' },
               { id: 'analytics', label: 'Analytics', icon: '◈' },
               { id: 'tracks', label: 'Tracks', icon: '◑' },
+              { id: 'submissions', label: 'Submissions', icon: '◧' },
             ].map(item => (
               <div key={item.id} onClick={() => setActiveTab(item.id as any)} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
@@ -660,6 +656,9 @@ export default function AdminPage() {
                 fontSize: 14, fontWeight: activeTab === item.id ? 600 : 400,
               }}>
                 <span>{item.icon}</span>{item.label}
+                {item.id === 'submissions' && pendingCount > 0 && (
+                  <span style={{ marginLeft: 'auto', background: '#D59C10', color: '#1A1D21', borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '1px 7px', fontFamily: 'JetBrains Mono, monospace' }}>{pendingCount}</span>
+                )}
               </div>
             ))}
           </div>
@@ -1329,71 +1328,6 @@ export default function AdminPage() {
           )}
 
           {/* REVIEWS */}
-          {activeTab === 'reviews' && (
-            <div>
-              <div style={{ marginBottom: '2rem' }}>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// reviews'}</div>
-                <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5', letterSpacing: '-0.02em' }}>Submission Reviews</h1>
-                <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
-                  {submissions.filter(s => s.status === 'pending').length} pending
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {submissions.map(s => (
-                  <div key={s.id} style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '16px 20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                          <span style={{ fontSize: 15, fontWeight: 600, color: '#F5F5F5' }}>{s.studentName}</span>
-                          <span style={{
-                            fontSize: 10, padding: '2px 8px', borderRadius: 20, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
-                            background: s.status === 'pending' ? 'rgba(213,156,16,0.1)' : s.status === 'approved' ? 'rgba(76,175,125,0.1)' : 'rgba(220,38,38,0.1)',
-                            color: s.status === 'pending' ? '#D59C10' : s.status === 'approved' ? '#4CAF7D' : '#F87171',
-                          }}>{s.status.toUpperCase()}</span>
-                        </div>
-                        <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>{s.courseTitle} · {s.lessonTitle}</div>
-                        <div style={{ fontSize: 13, marginBottom: 4 }}>
-                          <a href={s.submission_url} target="_blank" rel="noreferrer" style={{ color: '#4E8FD4' }}>{s.submission_url}</a>
-                        </div>
-                        {s.note && <div style={{ fontSize: 13, color: '#6B7280' }}>{s.note}</div>}
-                      </div>
-                      {s.status === 'pending' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, minWidth: 220 }}>
-                          <textarea
-                            value={reviewingId === s.id ? reviewFeedback : ''}
-                            onChange={e => { setReviewingId(s.id); setReviewFeedback(e.target.value); }}
-                            placeholder="Feedback (optional)"
-                            rows={2}
-                            style={{ ...inputStyle, height: 'auto', padding: '8px 12px', resize: 'vertical' as const, fontSize: 13 }}
-                          />
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <button onClick={() => reviewSubmission(s.id, 'approved')} disabled={savingReview} style={{
-                              flex: 1, background: 'rgba(76,175,125,0.1)', border: '1px solid rgba(76,175,125,0.3)', borderRadius: 20,
-                              padding: '6px 14px', fontSize: 12, color: '#4CAF7D', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-                            }}>Approve</button>
-                            <button onClick={() => reviewSubmission(s.id, 'rejected')} disabled={savingReview} style={{
-                              flex: 1, background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 20,
-                              padding: '6px 14px', fontSize: 12, color: '#F87171', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-                            }}>Reject</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    {s.status !== 'pending' && s.feedback && (
-                      <div style={{ marginTop: 10, fontSize: 12, color: '#6B7280', borderTop: '1px solid #2A2F35', paddingTop: 10 }}>Feedback: {s.feedback}</div>
-                    )}
-                  </div>
-                ))}
-                {submissions.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '4rem 0', color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
-                    {'// no submissions yet.'}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* STUDENTS */}
           {activeTab === 'analytics' && (
             <div>
@@ -1615,8 +1549,101 @@ export default function AdminPage() {
             </div>
           )}
 
+          {/* SUBMISSIONS */}
+          {activeTab === 'submissions' && (
+            <div>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// submissions'}</div>
+                <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Project Submissions</h1>
+                <p style={{ fontSize: 14, color: '#6B7280', marginTop: 4 }}>{pendingCount} pending review</p>
+              </div>
+
+              {submissions.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '4rem 0', border: '1px dashed #2A2F35', borderRadius: 20 }}>
+                  <div style={{ fontSize: 13, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace' }}>No submissions yet</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {submissions.map(sub => (
+                    <div key={sub.id} style={{
+                      background: '#22262B', border: `1px solid ${sub.status === 'pending' ? 'rgba(213,156,16,0.3)' : sub.status === 'approved' ? 'rgba(76,175,125,0.25)' : 'rgba(248,113,113,0.25)'}`,
+                      borderRadius: 14, padding: '16px 20px',
+                      display: 'flex', alignItems: 'center', gap: 16,
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', padding: '2px 8px', borderRadius: 20, background: sub.status === 'pending' ? 'rgba(213,156,16,0.12)' : sub.status === 'approved' ? 'rgba(76,175,125,0.12)' : 'rgba(248,113,113,0.12)', color: sub.status === 'pending' ? '#D59C10' : sub.status === 'approved' ? '#4CAF7D' : '#F87171' }}>
+                            {sub.status.toUpperCase()}
+                          </span>
+                          <span style={{ fontSize: 11, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace' }}>{sub.lesson_type}</span>
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#F5F5F5', marginBottom: 2 }}>{sub.student_name}</div>
+                        <div style={{ fontSize: 12, color: '#6B7280' }}>{sub.course_title} &rsaquo; {sub.lesson_title}</div>
+                        <div style={{ fontSize: 11, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', marginTop: 4 }}>
+                          {new Date(sub.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                      <button onClick={() => { setSelectedSubmission(sub); setGradingFeedback(sub.feedback || ''); }} style={{ background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 20, padding: '7px 18px', fontSize: 13, color: '#F5F5F5', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        Review
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
         </main>
       </div>
+
+      {/* Submission review modal */}
+      {selectedSubmission && (
+        <div onClick={e => { if (e.target === e.currentTarget) { setSelectedSubmission(null); setGradingFeedback(''); } }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#1A1D21', border: '1px solid #2A2F35', borderRadius: 20, width: '100%', maxWidth: 760, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #2A2F35', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#F5F5F5', marginBottom: 2 }}>{selectedSubmission.student_name}</div>
+                <div style={{ fontSize: 13, color: '#6B7280' }}>{selectedSubmission.course_title} &rsaquo; {selectedSubmission.lesson_title}</div>
+              </div>
+              <button onClick={() => { setSelectedSubmission(null); setGradingFeedback(''); }} style={{ background: 'none', border: 'none', color: '#6B7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, flexShrink: 0 }}>x</button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+              {selectedSubmission.notes && (
+                <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Student note</div>
+                  <div style={{ fontSize: 13, color: '#9CA3AF' }}>{selectedSubmission.notes}</div>
+                </div>
+              )}
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 10, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Submitted code</div>
+                <pre style={{ background: '#0D1117', border: '1px solid #2A2F35', borderRadius: 10, padding: '14px 16px', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#E5E7EB', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, maxHeight: 320, overflowY: 'auto' }}>{selectedSubmission.submitted_code}</pre>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 10, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Feedback for student</div>
+                <textarea
+                  value={gradingFeedback}
+                  onChange={e => setGradingFeedback(e.target.value)}
+                  placeholder="Write feedback (required when returning for rework)..."
+                  rows={4}
+                  style={{ width: '100%', background: '#22262B', border: '1px solid #3A3F46', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#F5F5F5', fontFamily: 'DM Sans, sans-serif', resize: 'vertical', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => gradeSubmission('approved')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: 'none', background: grading ? '#22262B' : '#4CAF7D', color: grading ? '#6B7280' : '#1A1D21', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                  {grading ? 'Saving...' : 'Approve'}
+                </button>
+                <button onClick={() => gradeSubmission('rework')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#F87171', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                  Return for Rework
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Student detail modal */}
       {selectedStudent && (
