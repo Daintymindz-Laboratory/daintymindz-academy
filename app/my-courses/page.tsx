@@ -91,8 +91,9 @@ export default function MyCoursesPage() {
         const prog = progressMap[courseId];
         const completedLessons: number[] = prog?.completedLessons || [];
         const courseLessons = (lessonsData || []).filter((l: any) => l.course_id === courseId);
-        const nextLesson = courseLessons.find((l: any) => !completedLessons.includes(l.id));
-        resumeMap[courseId] = nextLesson ? nextLesson.id : (courseLessons[0]?.id || null);
+        const nextLesson = courseLessons.find((l: any) => !completedLessons.includes(Number(l.id)));
+        const lastLesson = courseLessons[courseLessons.length - 1];
+        resumeMap[courseId] = nextLesson ? nextLesson.id : (lastLesson?.id || null);
       }
 
       if (enrollments) {
@@ -281,7 +282,7 @@ export default function MyCoursesPage() {
 
                     <button
                       onClick={() => {
-                        const lessonId = course.resumeLessonId || '1';
+                        const lessonId = course.resumeLessonId || 'start';
                         window.location.href = `/lesson/${course.id}/${lessonId}`;
                       }}
                       style={{

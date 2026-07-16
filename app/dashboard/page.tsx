@@ -231,9 +231,10 @@ export default function Dashboard() {
           const completedLessons: number[] = (prog?.completed_lessons || []).map(Number);
           const courseLessons = (lessonsData || []).filter((l: any) => Number(l.course_id) === Number(courseId));
           const nextLesson = courseLessons.find((l: any) => !completedLessons.includes(Number(l.id)));
+          const lastLesson = courseLessons[courseLessons.length - 1];
           resumeLessonIdMap[Number(courseId)] = nextLesson
             ? Number(nextLesson.id)
-            : courseLessons[0] ? Number(courseLessons[0].id) : null;
+            : lastLesson ? Number(lastLesson.id) : null;
         }
       }
 
@@ -523,7 +524,7 @@ export default function Dashboard() {
                       <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>{c.progress}% complete</div>
                       <button
                         onClick={() => {
-                          const lessonId = c.resumeLessonId || '1';
+                          const lessonId = c.resumeLessonId || 'start';
                           window.location.href = `/lesson/${c.id}/${lessonId}`;
                         }}
                         style={{

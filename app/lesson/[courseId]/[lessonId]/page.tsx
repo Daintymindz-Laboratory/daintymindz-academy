@@ -112,7 +112,7 @@ export default function LessonPage() {
       if (!lessonsData || lessonsData.length === 0) { setLoading(false); return; }
       setLessons(lessonsData);
 
-      const target = lessonId === '1'
+      const target = (lessonId === 'start' || lessonId === '1' || !lessonId)
         ? lessonsData[0]
         : (lessonsData.find((l: Lesson) => l.id === parseInt(lessonId)) || lessonsData[0]);
       if (target) {
