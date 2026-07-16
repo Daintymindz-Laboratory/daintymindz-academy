@@ -62,6 +62,25 @@ type Submission = {
   lesson_title: string;
 };
 
+// Distinct from `Submission`/`project_submissions` (mini_project/project auto-grade
+// review) — this covers `lesson_submissions`, the `requires_review` flow for
+// lesson/assessment/project-without-tests lessons (real-world tasks like a PR).
+type LessonReview = {
+  id: number;
+  user_id: string;
+  lesson_id: number;
+  submission_url: string;
+  note: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  feedback: string | null;
+  created_at: string;
+  studentName: string;
+  studentEmail: string;
+  lessonTitle: string;
+  courseTitle: string;
+  courseId: number | null;
+};
+
 const FALLBACK_TRACKS: Record<string, { label: string; color: string }> = Object.fromEntries(
   Object.entries(BASE_FALLBACK_TRACKS).map(([k, v]) => [k, { label: v.label, color: v.color }])
 );
@@ -94,8 +113,12 @@ export default function AdminPage() {
   const [adminProfileSaving, setAdminProfileSaving] = useState(false);
   const [adminProfiles, setAdminProfiles] = useState<{ id: string; full_name: string; position: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'submissions' | 'messages'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'submissions' | 'messages' | 'reviews'>('courses');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [lessonReviews, setLessonReviews] = useState<LessonReview[]>([]);
+  const [reviewingLessonId, setReviewingLessonId] = useState<number | null>(null);
+  const [lessonReviewFeedback, setLessonReviewFeedback] = useState('');
+  const [savingLessonReview, setSavingLessonReview] = useState(false);
   const [tracks, setTracks] = useState<Track[]>(Object.entries(FALLBACK_TRACKS).map(([code, t]) => ({ code, ...t })));
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
   const [savingTrack, setSavingTrack] = useState(false);
@@ -171,6 +194,7 @@ export default function AdminPage() {
       await loadStudents(supabase);
       await loadAnalytics(supabase);
       await loadSubmissions(supabase);
+      await loadLessonReviews(supabase);
       const { data: admins } = await supabase.from('profiles').select('id, full_name, position').eq('is_admin', true).order('full_name');
       if (admins) setAdminProfiles(admins);
       setLoading(false);
@@ -274,6 +298,66 @@ export default function AdminPage() {
     setGradingFeedback('');
     setGrading(false);
     showToast(status === 'approved' ? 'Submission approved!' : 'Returned for rework.');
+  };
+
+  // lesson_submissions: the `requires_review` flow for lesson/assessment/
+  // project-without-tests lessons (real-world tasks like a PR), distinct
+  // from project_submissions/gradeSubmission above.
+  const loadLessonReviews = async (supabase: any) => {
+    const { data: subs, error } = await supabase.from('lesson_submissions').select('*').order('created_at', { ascending: false });
+    if (error) { console.error('loadLessonReviews error:', error); return; }
+    if (!subs || subs.length === 0) { setLessonReviews([]); return; }
+    const userIds = Array.from(new Set(subs.map((s: any) => s.user_id)));
+    const lessonIds = Array.from(new Set(subs.map((s: any) => s.lesson_id)));
+    const [{ data: profilesData }, { data: lessonsData }] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, email').in('id', userIds),
+      supabase.from('lessons').select('id, title, course_id').in('id', lessonIds),
+    ]);
+    const profileMap: Record<string, { full_name: string; email: string }> = {};
+    (profilesData || []).forEach((p: any) => { profileMap[p.id] = p; });
+    const lessonMap: Record<number, { title: string; course_id: number }> = {};
+    (lessonsData || []).forEach((l: any) => { lessonMap[l.id] = l; });
+    const courseIds = Array.from(new Set(Object.values(lessonMap).map((l: any) => l.course_id)));
+    const { data: coursesData } = courseIds.length
+      ? await supabase.from('courses').select('id, title').in('id', courseIds)
+      : { data: [] };
+    const courseMap: Record<number, string> = {};
+    (coursesData || []).forEach((c: any) => { courseMap[c.id] = c.title; });
+    const enriched: LessonReview[] = subs
+      .map((s: any) => ({
+        ...s,
+        studentName: profileMap[s.user_id]?.full_name || 'Unknown',
+        studentEmail: profileMap[s.user_id]?.email || '',
+        lessonTitle: lessonMap[s.lesson_id]?.title || '',
+        courseTitle: courseMap[lessonMap[s.lesson_id]?.course_id] || '',
+        courseId: lessonMap[s.lesson_id]?.course_id ?? null,
+      }))
+      .sort((a: LessonReview, b: LessonReview) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1));
+    setLessonReviews(enriched);
+  };
+
+  const reviewLessonSubmission = async (review: LessonReview, status: 'approved' | 'rejected') => {
+    setSavingLessonReview(true);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { error } = await supabase.from('lesson_submissions').update({
+      status, feedback: lessonReviewFeedback.trim() || null, reviewed_by: adminId, reviewed_at: new Date().toISOString(),
+    }).eq('id', review.id);
+    if (error) { showToast(`Error: ${error.message}`); setSavingLessonReview(false); return; }
+    notify({
+      userId: review.user_id,
+      type: status === 'approved' ? 'submission_approved' : 'submission_rework',
+      title: status === 'approved' ? 'Submission approved!' : 'Changes requested',
+      message: status === 'approved'
+        ? `Your submission for "${review.lessonTitle}" has been approved.`
+        : `Your submission for "${review.lessonTitle}" needs changes.${lessonReviewFeedback.trim() ? ` Feedback: ${lessonReviewFeedback.trim()}` : ''}`,
+      link: review.courseId ? `/lesson/${review.courseId}/${review.lesson_id}` : undefined,
+    });
+    await loadLessonReviews(supabase);
+    setReviewingLessonId(null);
+    setLessonReviewFeedback('');
+    setSavingLessonReview(false);
+    showToast(status === 'approved' ? 'Submission approved.' : 'Submission rejected.');
   };
 
   const loadCourses = async (supabase: any) => {
@@ -671,6 +755,7 @@ export default function AdminPage() {
               { id: 'analytics', label: 'Analytics', icon: '◈' },
               { id: 'tracks', label: 'Tracks', icon: '◑' },
               { id: 'submissions', label: 'Submissions', icon: '◧' },
+              { id: 'reviews', label: 'Lesson Reviews', icon: '☑' },
               { id: 'messages', label: 'Messages', icon: '✉' },
             ].map(item => (
               <div key={item.id} onClick={() => setActiveTab(item.id as any)} style={{
@@ -685,6 +770,9 @@ export default function AdminPage() {
                 <span>{item.icon}</span>{item.label}
                 {item.id === 'submissions' && pendingCount > 0 && (
                   <span style={{ marginLeft: 'auto', background: '#D59C10', color: '#1A1D21', borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '1px 7px', fontFamily: 'JetBrains Mono, monospace' }}>{pendingCount}</span>
+                )}
+                {item.id === 'reviews' && lessonReviews.filter(r => r.status === 'pending').length > 0 && (
+                  <span style={{ marginLeft: 'auto', background: '#D59C10', color: '#1A1D21', borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '1px 7px', fontFamily: 'JetBrains Mono, monospace' }}>{lessonReviews.filter(r => r.status === 'pending').length}</span>
                 )}
               </div>
             ))}
@@ -1355,7 +1443,6 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* REVIEWS */}
           {/* STUDENTS */}
           {activeTab === 'analytics' && (
             <div>
@@ -1640,6 +1727,73 @@ export default function AdminPage() {
               </div>
             );
           })()}
+
+          {/* LESSON REVIEWS: requires_review flow (lesson_submissions), separate from project_submissions above */}
+          {activeTab === 'reviews' && (
+            <div>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// lesson reviews'}</div>
+                <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Lesson Reviews</h1>
+                <p style={{ fontSize: 14, color: '#6B7280', marginTop: 4 }}>
+                  {lessonReviews.filter(r => r.status === 'pending').length} pending &middot; for lessons marked &ldquo;Requires review&rdquo; (real-world tasks like a PR, not auto-graded code)
+                </p>
+              </div>
+
+              {lessonReviews.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '4rem 0', border: '1px dashed #2A2F35', borderRadius: 20 }}>
+                  <div style={{ fontSize: 13, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace' }}>No submissions yet</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {lessonReviews.map(r => (
+                    <div key={r.id} style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '16px 20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                            <span style={{ fontSize: 15, fontWeight: 600, color: '#F5F5F5' }}>{r.studentName}</span>
+                            <span style={{
+                              fontSize: 10, padding: '2px 8px', borderRadius: 20, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
+                              background: r.status === 'pending' ? 'rgba(213,156,16,0.1)' : r.status === 'approved' ? 'rgba(76,175,125,0.1)' : 'rgba(220,38,38,0.1)',
+                              color: r.status === 'pending' ? '#D59C10' : r.status === 'approved' ? '#4CAF7D' : '#F87171',
+                            }}>{r.status.toUpperCase()}</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>{r.courseTitle} &rsaquo; {r.lessonTitle}</div>
+                          <div style={{ fontSize: 13, marginBottom: 4 }}>
+                            <a href={r.submission_url} target="_blank" rel="noreferrer" style={{ color: '#4E8FD4' }}>{r.submission_url}</a>
+                          </div>
+                          {r.note && <div style={{ fontSize: 13, color: '#6B7280' }}>{r.note}</div>}
+                        </div>
+                        {r.status === 'pending' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, minWidth: 220 }}>
+                            <textarea
+                              value={reviewingLessonId === r.id ? lessonReviewFeedback : ''}
+                              onChange={e => { setReviewingLessonId(r.id); setLessonReviewFeedback(e.target.value); }}
+                              placeholder="Feedback (optional)"
+                              rows={2}
+                              style={{ ...inputStyle, height: 'auto', padding: '8px 12px', resize: 'vertical' as const, fontSize: 13 }}
+                            />
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button onClick={() => reviewLessonSubmission(r, 'approved')} disabled={savingLessonReview} style={{
+                                flex: 1, background: 'rgba(76,175,125,0.1)', border: '1px solid rgba(76,175,125,0.3)', borderRadius: 20,
+                                padding: '6px 14px', fontSize: 12, color: '#4CAF7D', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                              }}>Approve</button>
+                              <button onClick={() => reviewLessonSubmission(r, 'rejected')} disabled={savingLessonReview} style={{
+                                flex: 1, background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 20,
+                                padding: '6px 14px', fontSize: 12, color: '#F87171', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                              }}>Reject</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {r.status !== 'pending' && r.feedback && (
+                        <div style={{ marginTop: 10, fontSize: 12, color: '#6B7280', borderTop: '1px solid #2A2F35', paddingTop: 10 }}>Feedback: {r.feedback}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
         </main>
       </div>
