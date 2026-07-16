@@ -605,16 +605,56 @@ https://github.com/Daintymindz-Laboratory/daintymindz-academy/pull/1
    state, `loadLessonReviews`/`reviewLessonSubmission` functions, and a
    **"Lesson Reviews"** sidebar tab (distinct from "Submissions") that
    queries `lesson_submissions` directly. Fully additive — doesn't touch
-   `project_submissions`/`gradeSubmission`/the "Submissions" tab at all,
-   so both systems now coexist side by side rather than being merged into
-   one. That consolidation question (should these become one system) is
-   still open if you want to revisit it, but functionality is restored
-   either way. `tsc`/`next build` both verified clean on this branch.
-2. **`AGENTS.md`** in this repo contains prompt-injection-style content
+   `project_submissions`/`gradeSubmission`/the "Submissions" tab at all.
+   `tsc`/`next build` both verified clean on this branch.
+
+2. **Needs consolidation: two parallel submission/review systems.** The
+   fix above restores function without merging anything — it leaves real,
+   confirmed duplication in place, not just a naming coincidence:
+
+   | | `lesson_submissions` (mine) | `project_submissions` (theirs) |
+   | --- | --- | --- |
+   | What's submitted | a URL + note | code + notes |
+   | Status values | `pending`/`approved`/`rejected` | `pending`/`approved`/`rework` |
+   | Admin tab | "Lesson Reviews" | "Submissions" |
+   | Load function | `loadLessonReviews` | `loadSubmissions` |
+   | Approve/reject function | `reviewLessonSubmission` | `gradeSubmission` |
+   | Notifies student on decision | yes (`notify()`) | yes (`notify()`) |
+
+   Both are the same underlying job — student submits something, admin
+   reviews, approves/rejects with feedback, student gets notified,
+   completion updates — implemented twice, for different lesson-type
+   scopes (mine: `lesson`/`assessment`/project-without-tests, needs just a
+   link; theirs: `mini_project`/`project`, needs the actual code +
+   auto-grader context). That scope difference is real, but it doesn't
+   require two separate tables/tabs/functions — a single submissions
+   table with an optional `submission_code` vs `submission_url` field
+   (or a `kind` discriminator) could serve both, with one admin tab.
+
+   **Action needed:** consolidate these into one system before adding any
+   more review-gated lesson types, so a third variant doesn't show up
+   later. Whoever does this should decide the unified schema/status
+   vocabulary (`rejected` vs `rework` — pick one), migrate existing rows
+   from both tables, and remove the now-redundant tab/functions on
+   whichever side loses.
+
+   Also worth checking as part of that work, not confirmed either way:
+   `gradeSubmission`'s approve path does
+   `supabase.from('progress').upsert({ user_id, course_id, lesson_id, completed: true }, { onConflict: 'user_id,course_id' })`,
+   but the `progress` table everywhere else (including `markComplete` in
+   the lesson page) tracks completion via a `completed_lessons` jsonb
+   array, not a per-row `lesson_id`/`completed` boolean. Upsert only
+   touches the columns passed, so it shouldn't be actively wiping
+   `completed_lessons` — but it's not confirmed those columns exist on
+   the live `progress` table at all (vs. silently erroring). Check this
+   before assuming project-submission approval correctly marks a lesson
+   complete end-to-end.
+
+3. **`AGENTS.md`** in this repo contains prompt-injection-style content
    (false claims about "breaking Next.js changes," pointing agents at a
    non-existent doc path). Still present, unaddressed — worth finding out
    how it got there and removing it.
-3. `supabase/migrations/20260710_project_submissions.sql` was added
+4. `supabase/migrations/20260710_project_submissions.sql` was added
    separately to capture `077189d`'s previously-uncommitted DDL — run it
    (and `20260703_lesson_submissions.sql`, and
    `20260710_notifications_comments_messages.sql` if not already applied)
