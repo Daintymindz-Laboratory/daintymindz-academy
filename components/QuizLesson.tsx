@@ -52,7 +52,7 @@ export default function QuizLesson({ lessonId, userId, trackColor, introduction,
   }, [lessonId]);
 
   const submit = async () => {
-    if (saving) return;
+    if (saving || submitted) return;
     const correct = questions.filter(q => answers[q.id] === q.correct_answer).length;
     const total = questions.length;
     const didPass = total > 0 && Math.round((correct / total) * 100) >= 80;
