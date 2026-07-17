@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# personal / local (not shared in the repo)
+COURSE_HANDOVER.md
+.claude/settings.json
+.claude/settings.local.json
