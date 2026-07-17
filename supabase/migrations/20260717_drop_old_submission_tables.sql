@@ -1,0 +1,52 @@
+-- ============================================================
+-- CONTRACT step of the submissions merge (see 20260716_unify_submissions.sql).
+--
+-- Run this ONLY AFTER:
+--   1. 20260716_unify_submissions.sql has been applied,
+--   2. the new code (reading/writing `submissions`) is deployed, AND
+--   3. you have run the optional delta backfill below and verified counts.
+--
+-- It renames the old tables out of the way rather than dropping them, so a
+-- rollback is instant: redeploy the old code and rename them back. Drop them
+-- for good only once you are confident (see the final, commented-out section).
+-- ============================================================
+
+-- ── Optional delta backfill ──────────────────────────────────
+-- Copies any rows students wrote to the OLD tables during the deploy window
+-- (i.e. after 20260716 ran but before the new code went live). Safe to run
+-- even if there are none. Adjust the timestamp to when you ran 20260716.
+--
+-- DO $$
+-- DECLARE cutoff timestamptz := '2026-07-16 00:00:00+00';  -- when 20260716 ran
+-- BEGIN
+--   INSERT INTO submissions
+--     (user_id, lesson_id, course_id, kind, lesson_type, submission_url, note,
+--      status, feedback, reviewed_by, reviewed_at, created_at)
+--   SELECT ls.user_id, ls.lesson_id, l.course_id, 'link', l.type, ls.submission_url, ls.note,
+--     CASE ls.status WHEN 'rejected' THEN 'changes_requested' ELSE ls.status END,
+--     ls.feedback, ls.reviewed_by, ls.reviewed_at, ls.created_at
+--   FROM lesson_submissions ls JOIN lessons l ON l.id = ls.lesson_id
+--   WHERE ls.created_at > cutoff;
+--
+--   INSERT INTO submissions
+--     (user_id, lesson_id, course_id, kind, lesson_type, submitted_code, note,
+--      status, feedback, reviewed_by, reviewed_at, created_at)
+--   SELECT ps.user_id, ps.lesson_id, ps.course_id, 'code', ps.lesson_type,
+--     coalesce(ps.submitted_code, ''), ps.notes,
+--     CASE ps.status WHEN 'pending' THEN 'pending' WHEN 'approved' THEN 'approved'
+--                    ELSE 'changes_requested' END,
+--     ps.feedback, (SELECT p.id FROM profiles p WHERE p.id = ps.reviewed_by),
+--     ps.reviewed_at, ps.submitted_at
+--   FROM project_submissions ps
+--   WHERE ps.submitted_at > cutoff
+--     AND EXISTS (SELECT 1 FROM lessons l WHERE l.id = ps.lesson_id)
+--     AND EXISTS (SELECT 1 FROM courses c WHERE c.id = ps.course_id);
+-- END $$;
+
+-- ── Rename the old tables out of the way (reversible) ─────────
+ALTER TABLE IF EXISTS lesson_submissions  RENAME TO lesson_submissions_old;
+ALTER TABLE IF EXISTS project_submissions RENAME TO project_submissions_old;
+
+-- ── Final drop — uncomment and run once you are confident ─────
+-- DROP TABLE IF EXISTS lesson_submissions_old;
+-- DROP TABLE IF EXISTS project_submissions_old;

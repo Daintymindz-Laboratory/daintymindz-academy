@@ -9,6 +9,7 @@ import ProjectLesson from '@/components/ProjectLesson';
 import LessonSubmission from '@/components/LessonSubmission';
 import { useUser, updateStreak } from '@/lib/user-context';
 import { notify } from '@/lib/notify';
+import { addCompletedLesson, completionPercentage, generateCertId } from '@/lib/completion';
 import NotificationBell from '@/components/NotificationBell';
 import CourseComments from '@/components/CourseComments';
 import MessageCenter from '@/components/MessageCenter';
@@ -185,14 +186,13 @@ export default function LessonPage() {
   const markComplete = async () => {
     if (!currentLesson || !userId) return;
     const lessonIdNum = Number(currentLesson.id);
-    const safe = completedIds.map(Number);
-    const newCompleted = safe.includes(lessonIdNum) ? safe : [...safe, lessonIdNum];
+    const newCompleted = addCompletedLesson(completedIds, lessonIdNum);
     setCompletedIds(newCompleted);
     updateStreak(userId).then(streak => setUser({ streak }));
 
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
-    const percentage = Math.round((newCompleted.length / lessons.length) * 100);
+    const percentage = completionPercentage(newCompleted.length, lessons.length);
 
     const { data: existing } = await supabase
       .from('progress').select('id')
@@ -213,7 +213,7 @@ export default function LessonPage() {
     }
 
     if (newCompleted.length === lessons.length) {
-      const certId = `CERT-DM-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+      const certId = generateCertId(new Date().getFullYear());
       await supabase.from('certificates').insert({ user_id: userId, course_id: parseInt(courseId), cert_id: certId });
       notify({ userId, type: 'course_completed', title: 'Course completed!', message: `Congratulations! You completed "${course?.title}" and earned a certificate.`, link: '/certificates' });
       notify({ adminBroadcast: true, type: 'course_completed', title: 'Student completed a course', message: `A student completed "${course?.title}".`, link: '/admin' });
@@ -380,6 +380,8 @@ export default function LessonPage() {
                 <LessonSubmission
                   key={currentLesson.id}
                   lessonId={Number(currentLesson.id)}
+                  courseId={Number(courseId)}
+                  lessonType={currentLesson.type}
                   userId={userId}
                   trackColor={trackColor}
                   isCompleted={isCompleted}

@@ -21,13 +21,13 @@ interface TestResult {
   error?: string;
 }
 
-type SubmissionStatus = 'pending' | 'approved' | 'rework';
+type SubmissionStatus = 'pending' | 'approved' | 'changes_requested';
 
 interface Submission {
   id: number;
   status: SubmissionStatus;
   feedback: string | null;
-  submitted_at: string;
+  created_at: string;
 }
 
 interface Props {
@@ -75,7 +75,7 @@ export default function MiniProjectLesson({
       const [{ data: tcData }, { data: resultData }, { data: subData }] = await Promise.all([
         supabase.from('mini_project_test_cases').select('*').eq('lesson_id', lessonId).order('order_index'),
         supabase.from('mini_project_results').select('submitted_code').eq('lesson_id', lessonId).eq('user_id', userId).maybeSingle(),
-        supabase.from('project_submissions').select('id, status, feedback, submitted_at').eq('lesson_id', lessonId).eq('user_id', userId).order('submitted_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('submissions').select('id, status, feedback, created_at').eq('lesson_id', lessonId).eq('user_id', userId).eq('kind', 'code').order('created_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       setTestCases(tcData || []);
       if (subData) setSubmission(subData);
@@ -132,11 +132,11 @@ export default function MiniProjectLesson({
     setSubmitting(true);
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
-    const { data, error } = await supabase.from('project_submissions').insert({
+    const { data, error } = await supabase.from('submissions').insert({
       user_id: userId, lesson_id: lessonId, course_id: courseId,
-      lesson_type: 'mini_project', submitted_code: code,
-      notes: submitNote.trim() || null, status: 'pending',
-    }).select('id, status, feedback, submitted_at').single();
+      kind: 'code', lesson_type: 'mini_project', submitted_code: code,
+      note: submitNote.trim() || null, status: 'pending',
+    }).select('id, status, feedback, created_at').single();
     if (!error && data) {
       setSubmission(data);
       setShowSubmitForm(false);
@@ -177,13 +177,13 @@ export default function MiniProjectLesson({
         {submission && (
           <div style={{
             padding: '12px 16px', borderRadius: 12, marginBottom: 16,
-            background: submission.status === 'approved' ? 'rgba(76,175,125,0.08)' : submission.status === 'rework' ? 'rgba(248,113,113,0.08)' : 'rgba(213,156,16,0.08)',
-            border: `1px solid ${submission.status === 'approved' ? 'rgba(76,175,125,0.3)' : submission.status === 'rework' ? 'rgba(248,113,113,0.3)' : 'rgba(213,156,16,0.3)'}`,
+            background: submission.status === 'approved' ? 'rgba(76,175,125,0.08)' : submission.status === 'changes_requested' ? 'rgba(248,113,113,0.08)' : 'rgba(213,156,16,0.08)',
+            border: `1px solid ${submission.status === 'approved' ? 'rgba(76,175,125,0.3)' : submission.status === 'changes_requested' ? 'rgba(248,113,113,0.3)' : 'rgba(213,156,16,0.3)'}`,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: submission.feedback ? 6 : 0 }}>
-              <span style={{ fontSize: 16 }}>{submission.status === 'approved' ? '✓' : submission.status === 'rework' ? '↩' : '⏳'}</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: submission.status === 'approved' ? '#4CAF7D' : submission.status === 'rework' ? '#F87171' : '#D59C10' }}>
-                {submission.status === 'approved' ? 'Submission approved!' : submission.status === 'rework' ? 'Needs rework' : 'Submitted for review'}
+              <span style={{ fontSize: 16 }}>{submission.status === 'approved' ? '✓' : submission.status === 'changes_requested' ? '↩' : '⏳'}</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: submission.status === 'approved' ? '#4CAF7D' : submission.status === 'changes_requested' ? '#F87171' : '#D59C10' }}>
+                {submission.status === 'approved' ? 'Submission approved!' : submission.status === 'changes_requested' ? 'Changes requested' : 'Submitted for review'}
               </span>
             </div>
             {submission.feedback && (
@@ -226,7 +226,7 @@ export default function MiniProjectLesson({
           </div>
         )}
 
-        {submission?.status === 'rework' && (
+        {submission?.status === 'changes_requested' && (
           <div style={{ marginBottom: 16 }}>
             <button onClick={() => { setSubmission(null); setShowSubmitForm(true); }} style={{
               background: 'transparent', border: '1px solid #F87171',

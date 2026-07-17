@@ -45,40 +45,27 @@ type Lesson = {
   requires_review: boolean;
 };
 
+// One unified submission type. `kind` discriminates a link submission
+// (URL + note, e.g. a PR for a requires_review lesson) from a code submission
+// (Monaco code, e.g. a mini_project). Replaces the former Submission/LessonReview pair.
 type Submission = {
   id: number;
   user_id: string;
   lesson_id: number;
   course_id: number;
+  kind: 'link' | 'code';
   lesson_type: string;
-  submitted_code: string;
-  notes: string | null;
-  status: 'pending' | 'approved' | 'rework';
+  submission_url: string | null;
+  submitted_code: string | null;
+  note: string | null;
+  status: 'pending' | 'approved' | 'changes_requested';
   feedback: string | null;
-  submitted_at: string;
+  created_at: string;
   student_name: string;
+  student_email: string;
   course_title: string;
   course_instructor: string;
   lesson_title: string;
-};
-
-// Distinct from `Submission`/`project_submissions` (mini_project/project auto-grade
-// review) — this covers `lesson_submissions`, the `requires_review` flow for
-// lesson/assessment/project-without-tests lessons (real-world tasks like a PR).
-type LessonReview = {
-  id: number;
-  user_id: string;
-  lesson_id: number;
-  submission_url: string;
-  note: string | null;
-  status: 'pending' | 'approved' | 'rejected';
-  feedback: string | null;
-  created_at: string;
-  studentName: string;
-  studentEmail: string;
-  lessonTitle: string;
-  courseTitle: string;
-  courseId: number | null;
 };
 
 const FALLBACK_TRACKS: Record<string, { label: string; color: string }> = Object.fromEntries(
@@ -113,12 +100,8 @@ export default function AdminPage() {
   const [adminProfileSaving, setAdminProfileSaving] = useState(false);
   const [adminProfiles, setAdminProfiles] = useState<{ id: string; full_name: string; position: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'submissions' | 'messages' | 'reviews'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'submissions' | 'messages'>('courses');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [lessonReviews, setLessonReviews] = useState<LessonReview[]>([]);
-  const [reviewingLessonId, setReviewingLessonId] = useState<number | null>(null);
-  const [lessonReviewFeedback, setLessonReviewFeedback] = useState('');
-  const [savingLessonReview, setSavingLessonReview] = useState(false);
   const [tracks, setTracks] = useState<Track[]>(Object.entries(FALLBACK_TRACKS).map(([code, t]) => ({ code, ...t })));
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
   const [savingTrack, setSavingTrack] = useState(false);
@@ -194,7 +177,6 @@ export default function AdminPage() {
       await loadStudents(supabase);
       await loadAnalytics(supabase);
       await loadSubmissions(supabase);
-      await loadLessonReviews(supabase);
       const { data: admins } = await supabase.from('profiles').select('id, full_name, position').eq('is_admin', true).order('full_name');
       if (admins) setAdminProfiles(admins);
       setLoading(false);
@@ -239,31 +221,35 @@ export default function AdminPage() {
     showToast('Track deleted.');
   };
 
+  // One loader for the unified `submissions` table (both link + code kinds).
   const loadSubmissions = async (supabase: any) => {
     const { data, error } = await supabase
-      .from('project_submissions')
+      .from('submissions')
       .select('*')
-      .order('submitted_at', { ascending: false });
+      .order('created_at', { ascending: false });
     if (error) { console.error('loadSubmissions error:', error); return; }
     if (!data || data.length === 0) { setSubmissions([]); setPendingCount(0); return; }
 
     const lessonIds = [...new Set(data.map((s: any) => s.lesson_id as number))];
 
     const [{ data: profilesData }, { data: coursesData }, { data: lessonsData }] = await Promise.all([
-      supabase.from('profiles').select('id, full_name'),
+      supabase.from('profiles').select('id, full_name, email'),
       supabase.from('courses').select('id, title, created_by'),
       supabase.from('lessons').select('id, title').in('id', lessonIds),
     ]);
 
-    const profileMap: Record<string, string> = Object.fromEntries((profilesData || []).map((p: any) => [p.id, p.full_name || 'Unknown']));
+    const profileMap: Record<string, { full_name: string; email: string }> = Object.fromEntries(
+      (profilesData || []).map((p: any) => [p.id, { full_name: p.full_name || 'Unknown', email: p.email || '' }])
+    );
     const courseMap: Record<number, { title: string; instructor: string }> = Object.fromEntries(
-      (coursesData || []).map((c: any) => [c.id, { title: c.title, instructor: profileMap[c.created_by] || 'Unknown' }])
+      (coursesData || []).map((c: any) => [c.id, { title: c.title, instructor: profileMap[c.created_by]?.full_name || 'Unknown' }])
     );
     const lessonMap: Record<number, string> = Object.fromEntries((lessonsData || []).map((l: any) => [l.id, l.title]));
 
     const mapped = data.map((s: any) => ({
       ...s,
-      student_name: profileMap[s.user_id] || 'Unknown',
+      student_name: profileMap[s.user_id]?.full_name || 'Unknown',
+      student_email: profileMap[s.user_id]?.email || '',
       course_title: courseMap[s.course_id]?.title || '',
       course_instructor: courseMap[s.course_id]?.instructor || '',
       lesson_title: lessonMap[s.lesson_id] || '',
@@ -272,92 +258,42 @@ export default function AdminPage() {
     setPendingCount(mapped.filter((s: any) => s.status === 'pending').length);
   };
 
-  const gradeSubmission = async (status: 'approved' | 'rework') => {
+  // One grader for both kinds. On approval it marks the lesson complete via the
+  // authenticated /api/complete-lesson route — admins can't write another user's
+  // `progress` row directly (RLS only grants `own` access, and the admin panel
+  // uses the browser client).
+  const gradeSubmission = async (status: 'approved' | 'changes_requested') => {
     if (!selectedSubmission) return;
-    if (status === 'rework' && !gradingFeedback.trim()) { showToast('Please add feedback before returning for rework.'); return; }
+    if (status === 'changes_requested' && !gradingFeedback.trim()) { showToast('Please add feedback before requesting changes.'); return; }
     setGrading(true);
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
-    const { error } = await supabase.from('project_submissions')
+    const { error } = await supabase.from('submissions')
       .update({ status, feedback: gradingFeedback.trim() || null, reviewed_at: new Date().toISOString(), reviewed_by: adminId })
       .eq('id', selectedSubmission.id);
     if (error) { showToast(`Error: ${error.message}`); setGrading(false); return; }
     if (status === 'approved') {
-      await supabase.from('progress').upsert(
-        { user_id: selectedSubmission.user_id, course_id: selectedSubmission.course_id, lesson_id: selectedSubmission.lesson_id, completed: true },
-        { onConflict: 'user_id,course_id' }
-      );
-    }
-    if (status === 'approved') {
-      notify({ userId: selectedSubmission.user_id, type: 'submission_approved', title: 'Submission approved!', message: `Your project for "${selectedSubmission.lesson_title}" has been approved. Great work!`, link: `/lesson/${selectedSubmission.course_id}/${selectedSubmission.lesson_id}` });
+      try {
+        const res = await fetch('/api/complete-lesson', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: selectedSubmission.user_id,
+            courseId: selectedSubmission.course_id,
+            lessonId: selectedSubmission.lesson_id,
+          }),
+        });
+        if (!res.ok) console.error('complete-lesson failed:', res.status);
+      } catch (e) { console.error('complete-lesson error:', e); }
+      notify({ userId: selectedSubmission.user_id, type: 'submission_approved', title: 'Submission approved!', message: `Your submission for "${selectedSubmission.lesson_title}" has been approved. Great work!`, link: `/lesson/${selectedSubmission.course_id}/${selectedSubmission.lesson_id}` });
     } else {
-      notify({ userId: selectedSubmission.user_id, type: 'submission_rework', title: 'Submission needs rework', message: `Your project for "${selectedSubmission.lesson_title}" needs some changes. Feedback: ${gradingFeedback.trim()}`, link: `/lesson/${selectedSubmission.course_id}/${selectedSubmission.lesson_id}` });
+      notify({ userId: selectedSubmission.user_id, type: 'submission_rework', title: 'Changes requested', message: `Your submission for "${selectedSubmission.lesson_title}" needs some changes. Feedback: ${gradingFeedback.trim()}`, link: `/lesson/${selectedSubmission.course_id}/${selectedSubmission.lesson_id}` });
     }
     await loadSubmissions(supabase);
     setSelectedSubmission(null);
     setGradingFeedback('');
     setGrading(false);
-    showToast(status === 'approved' ? 'Submission approved!' : 'Returned for rework.');
-  };
-
-  // lesson_submissions: the `requires_review` flow for lesson/assessment/
-  // project-without-tests lessons (real-world tasks like a PR), distinct
-  // from project_submissions/gradeSubmission above.
-  const loadLessonReviews = async (supabase: any) => {
-    const { data: subs, error } = await supabase.from('lesson_submissions').select('*').order('created_at', { ascending: false });
-    if (error) { console.error('loadLessonReviews error:', error); return; }
-    if (!subs || subs.length === 0) { setLessonReviews([]); return; }
-    const userIds = Array.from(new Set(subs.map((s: any) => s.user_id)));
-    const lessonIds = Array.from(new Set(subs.map((s: any) => s.lesson_id)));
-    const [{ data: profilesData }, { data: lessonsData }] = await Promise.all([
-      supabase.from('profiles').select('id, full_name, email').in('id', userIds),
-      supabase.from('lessons').select('id, title, course_id').in('id', lessonIds),
-    ]);
-    const profileMap: Record<string, { full_name: string; email: string }> = {};
-    (profilesData || []).forEach((p: any) => { profileMap[p.id] = p; });
-    const lessonMap: Record<number, { title: string; course_id: number }> = {};
-    (lessonsData || []).forEach((l: any) => { lessonMap[l.id] = l; });
-    const courseIds = Array.from(new Set(Object.values(lessonMap).map((l: any) => l.course_id)));
-    const { data: coursesData } = courseIds.length
-      ? await supabase.from('courses').select('id, title').in('id', courseIds)
-      : { data: [] };
-    const courseMap: Record<number, string> = {};
-    (coursesData || []).forEach((c: any) => { courseMap[c.id] = c.title; });
-    const enriched: LessonReview[] = subs
-      .map((s: any) => ({
-        ...s,
-        studentName: profileMap[s.user_id]?.full_name || 'Unknown',
-        studentEmail: profileMap[s.user_id]?.email || '',
-        lessonTitle: lessonMap[s.lesson_id]?.title || '',
-        courseTitle: courseMap[lessonMap[s.lesson_id]?.course_id] || '',
-        courseId: lessonMap[s.lesson_id]?.course_id ?? null,
-      }))
-      .sort((a: LessonReview, b: LessonReview) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1));
-    setLessonReviews(enriched);
-  };
-
-  const reviewLessonSubmission = async (review: LessonReview, status: 'approved' | 'rejected') => {
-    setSavingLessonReview(true);
-    const { createClient } = await import('@/lib/supabase');
-    const supabase = createClient();
-    const { error } = await supabase.from('lesson_submissions').update({
-      status, feedback: lessonReviewFeedback.trim() || null, reviewed_by: adminId, reviewed_at: new Date().toISOString(),
-    }).eq('id', review.id);
-    if (error) { showToast(`Error: ${error.message}`); setSavingLessonReview(false); return; }
-    notify({
-      userId: review.user_id,
-      type: status === 'approved' ? 'submission_approved' : 'submission_rework',
-      title: status === 'approved' ? 'Submission approved!' : 'Changes requested',
-      message: status === 'approved'
-        ? `Your submission for "${review.lessonTitle}" has been approved.`
-        : `Your submission for "${review.lessonTitle}" needs changes.${lessonReviewFeedback.trim() ? ` Feedback: ${lessonReviewFeedback.trim()}` : ''}`,
-      link: review.courseId ? `/lesson/${review.courseId}/${review.lesson_id}` : undefined,
-    });
-    await loadLessonReviews(supabase);
-    setReviewingLessonId(null);
-    setLessonReviewFeedback('');
-    setSavingLessonReview(false);
-    showToast(status === 'approved' ? 'Submission approved.' : 'Submission rejected.');
+    showToast(status === 'approved' ? 'Submission approved!' : 'Changes requested.');
   };
 
   const loadCourses = async (supabase: any) => {
@@ -755,7 +691,6 @@ export default function AdminPage() {
               { id: 'analytics', label: 'Analytics', icon: '◈' },
               { id: 'tracks', label: 'Tracks', icon: '◑' },
               { id: 'submissions', label: 'Submissions', icon: '◧' },
-              { id: 'reviews', label: 'Lesson Reviews', icon: '☑' },
               { id: 'messages', label: 'Messages', icon: '✉' },
             ].map(item => (
               <div key={item.id} onClick={() => setActiveTab(item.id as any)} style={{
@@ -770,9 +705,6 @@ export default function AdminPage() {
                 <span>{item.icon}</span>{item.label}
                 {item.id === 'submissions' && pendingCount > 0 && (
                   <span style={{ marginLeft: 'auto', background: '#D59C10', color: '#1A1D21', borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '1px 7px', fontFamily: 'JetBrains Mono, monospace' }}>{pendingCount}</span>
-                )}
-                {item.id === 'reviews' && lessonReviews.filter(r => r.status === 'pending').length > 0 && (
-                  <span style={{ marginLeft: 'auto', background: '#D59C10', color: '#1A1D21', borderRadius: 99, fontSize: 10, fontWeight: 700, padding: '1px 7px', fontFamily: 'JetBrains Mono, monospace' }}>{lessonReviews.filter(r => r.status === 'pending').length}</span>
                 )}
               </div>
             ))}
@@ -1676,7 +1608,7 @@ export default function AdminPage() {
               <div>
                 <div style={{ marginBottom: '1.5rem' }}>
                   <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// submissions'}</div>
-                  <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Project Submissions</h1>
+                  <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Submissions</h1>
                   <p style={{ fontSize: 14, color: '#6B7280', marginTop: 4 }}>{pendingCount} pending review</p>
                 </div>
 
@@ -1707,11 +1639,12 @@ export default function AdminPage() {
                                     {sub.status.toUpperCase()}
                                   </span>
                                   <span style={{ fontSize: 11, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace' }}>{sub.lesson_type}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', padding: '2px 7px', borderRadius: 20, background: 'rgba(78,143,212,0.1)', color: '#4E8FD4' }}>{sub.kind === 'code' ? 'CODE' : 'LINK'}</span>
                                 </div>
                                 <div style={{ fontSize: 14, fontWeight: 600, color: '#F5F5F5', marginBottom: 2 }}>{sub.student_name}</div>
                                 <div style={{ fontSize: 12, color: '#6B7280' }}>{sub.lesson_title}</div>
                                 <div style={{ fontSize: 11, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', marginTop: 3 }}>
-                                  {new Date(sub.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                  {new Date(sub.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </div>
                               </div>
                               <button onClick={() => { setSelectedSubmission(sub); setGradingFeedback(sub.feedback || ''); }} style={{ background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 20, padding: '7px 18px', fontSize: 13, color: '#F5F5F5', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
@@ -1728,72 +1661,6 @@ export default function AdminPage() {
             );
           })()}
 
-          {/* LESSON REVIEWS: requires_review flow (lesson_submissions), separate from project_submissions above */}
-          {activeTab === 'reviews' && (
-            <div>
-              <div style={{ marginBottom: '1.5rem' }}>
-                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// lesson reviews'}</div>
-                <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Lesson Reviews</h1>
-                <p style={{ fontSize: 14, color: '#6B7280', marginTop: 4 }}>
-                  {lessonReviews.filter(r => r.status === 'pending').length} pending &middot; for lessons marked &ldquo;Requires review&rdquo; (real-world tasks like a PR, not auto-graded code)
-                </p>
-              </div>
-
-              {lessonReviews.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '4rem 0', border: '1px dashed #2A2F35', borderRadius: 20 }}>
-                  <div style={{ fontSize: 13, color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace' }}>No submissions yet</div>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {lessonReviews.map(r => (
-                    <div key={r.id} style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '16px 20px' }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                            <span style={{ fontSize: 15, fontWeight: 600, color: '#F5F5F5' }}>{r.studentName}</span>
-                            <span style={{
-                              fontSize: 10, padding: '2px 8px', borderRadius: 20, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
-                              background: r.status === 'pending' ? 'rgba(213,156,16,0.1)' : r.status === 'approved' ? 'rgba(76,175,125,0.1)' : 'rgba(220,38,38,0.1)',
-                              color: r.status === 'pending' ? '#D59C10' : r.status === 'approved' ? '#4CAF7D' : '#F87171',
-                            }}>{r.status.toUpperCase()}</span>
-                          </div>
-                          <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 8 }}>{r.courseTitle} &rsaquo; {r.lessonTitle}</div>
-                          <div style={{ fontSize: 13, marginBottom: 4 }}>
-                            <a href={r.submission_url} target="_blank" rel="noreferrer" style={{ color: '#4E8FD4' }}>{r.submission_url}</a>
-                          </div>
-                          {r.note && <div style={{ fontSize: 13, color: '#6B7280' }}>{r.note}</div>}
-                        </div>
-                        {r.status === 'pending' && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, minWidth: 220 }}>
-                            <textarea
-                              value={reviewingLessonId === r.id ? lessonReviewFeedback : ''}
-                              onChange={e => { setReviewingLessonId(r.id); setLessonReviewFeedback(e.target.value); }}
-                              placeholder="Feedback (optional)"
-                              rows={2}
-                              style={{ ...inputStyle, height: 'auto', padding: '8px 12px', resize: 'vertical' as const, fontSize: 13 }}
-                            />
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button onClick={() => reviewLessonSubmission(r, 'approved')} disabled={savingLessonReview} style={{
-                                flex: 1, background: 'rgba(76,175,125,0.1)', border: '1px solid rgba(76,175,125,0.3)', borderRadius: 20,
-                                padding: '6px 14px', fontSize: 12, color: '#4CAF7D', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-                              }}>Approve</button>
-                              <button onClick={() => reviewLessonSubmission(r, 'rejected')} disabled={savingLessonReview} style={{
-                                flex: 1, background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)', borderRadius: 20,
-                                padding: '6px 14px', fontSize: 12, color: '#F87171', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-                              }}>Reject</button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      {r.status !== 'pending' && r.feedback && (
-                        <div style={{ marginTop: 10, fontSize: 12, color: '#6B7280', borderTop: '1px solid #2A2F35', paddingTop: 10 }}>Feedback: {r.feedback}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
         </main>
       </div>
@@ -1811,17 +1678,24 @@ export default function AdminPage() {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-              {selectedSubmission.notes && (
+              {selectedSubmission.note && (
                 <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
                   <div style={{ fontSize: 10, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Student note</div>
-                  <div style={{ fontSize: 13, color: '#9CA3AF' }}>{selectedSubmission.notes}</div>
+                  <div style={{ fontSize: 13, color: '#9CA3AF' }}>{selectedSubmission.note}</div>
                 </div>
               )}
 
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 10, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Submitted code</div>
-                <pre style={{ background: '#0D1117', border: '1px solid #2A2F35', borderRadius: 10, padding: '14px 16px', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#E5E7EB', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, maxHeight: 320, overflowY: 'auto' }}>{selectedSubmission.submitted_code}</pre>
-              </div>
+              {selectedSubmission.kind === 'code' ? (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Submitted code</div>
+                  <pre style={{ background: '#0D1117', border: '1px solid #2A2F35', borderRadius: 10, padding: '14px 16px', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#E5E7EB', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, maxHeight: 320, overflowY: 'auto' }}>{selectedSubmission.submitted_code}</pre>
+                </div>
+              ) : (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Submitted link</div>
+                  <a href={selectedSubmission.submission_url || '#'} target="_blank" rel="noreferrer" style={{ fontSize: 14, color: '#4E8FD4', wordBreak: 'break-all' }}>{selectedSubmission.submission_url}</a>
+                </div>
+              )}
 
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 10, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Feedback for student</div>
@@ -1829,7 +1703,7 @@ export default function AdminPage() {
                   name="grading-feedback"
                   value={gradingFeedback}
                   onChange={e => setGradingFeedback(e.target.value)}
-                  placeholder="Write feedback (required when returning for rework)..."
+                  placeholder="Write feedback (required when requesting changes)..."
                   rows={4}
                   style={{ width: '100%', background: '#22262B', border: '1px solid #3A3F46', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: '#F5F5F5', fontFamily: 'DM Sans, sans-serif', resize: 'vertical', boxSizing: 'border-box' }}
                 />
@@ -1837,7 +1711,7 @@ export default function AdminPage() {
 
               {selectedSubmission.status !== 'pending' && (
                 <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 16, background: selectedSubmission.status === 'approved' ? 'rgba(76,175,125,0.08)' : 'rgba(248,113,113,0.08)', border: `1px solid ${selectedSubmission.status === 'approved' ? 'rgba(76,175,125,0.3)' : 'rgba(248,113,113,0.3)'}`, fontSize: 13, color: selectedSubmission.status === 'approved' ? '#4CAF7D' : '#F87171', fontWeight: 600 }}>
-                  {selectedSubmission.status === 'approved' ? 'Already approved' : 'Already returned for rework'}
+                  {selectedSubmission.status === 'approved' ? 'Already approved' : 'Changes already requested'}
                 </div>
               )}
               <div style={{ display: 'flex', gap: 10 }}>
@@ -1846,9 +1720,9 @@ export default function AdminPage() {
                     {grading ? 'Saving...' : 'Approve'}
                   </button>
                 )}
-                {selectedSubmission.status !== 'rework' && (
-                  <button onClick={() => gradeSubmission('rework')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#F87171', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                    Return for Rework
+                {selectedSubmission.status !== 'changes_requested' && (
+                  <button onClick={() => gradeSubmission('changes_requested')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#F87171', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                    Request Changes
                   </button>
                 )}
               </div>

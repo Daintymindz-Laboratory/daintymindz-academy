@@ -1,16 +1,19 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { notify } from '@/lib/notify';
 
 interface Submission {
   id: number;
   submission_url: string;
   note: string | null;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'changes_requested';
   feedback: string | null;
 }
 
 interface Props {
   lessonId: number;
+  courseId: number;
+  lessonType: string;
   userId: string;
   trackColor: string;
   isCompleted: boolean;
@@ -32,7 +35,7 @@ const labelStyle = {
   fontFamily: 'JetBrains Mono, monospace',
 };
 
-export default function LessonSubmission({ lessonId, userId, trackColor, isCompleted, onComplete }: Props) {
+export default function LessonSubmission({ lessonId, courseId, lessonType, userId, trackColor, isCompleted, onComplete }: Props) {
   const [loading, setLoading] = useState(!isCompleted);
   const [latest, setLatest] = useState<Submission | null>(null);
   const [url, setUrl] = useState('');
@@ -46,14 +49,14 @@ export default function LessonSubmission({ lessonId, userId, trackColor, isCompl
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
       const { data } = await supabase
-        .from('lesson_submissions')
+        .from('submissions')
         .select('id, submission_url, note, status, feedback')
-        .eq('user_id', userId).eq('lesson_id', lessonId)
+        .eq('user_id', userId).eq('lesson_id', lessonId).eq('kind', 'link')
         .order('created_at', { ascending: false })
         .limit(1).maybeSingle();
       if (data) {
         setLatest(data);
-        if (data.status === 'rejected') { setUrl(data.submission_url); setNote(data.note || ''); }
+        if (data.status === 'changes_requested') { setUrl(data.submission_url); setNote(data.note || ''); }
         if (data.status === 'approved') { onComplete(); }
       }
       setLoading(false);
@@ -71,13 +74,16 @@ export default function LessonSubmission({ lessonId, userId, trackColor, isCompl
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
     const { data, error: insertError } = await supabase
-      .from('lesson_submissions')
-      .insert({ user_id: userId, lesson_id: lessonId, submission_url: url.trim(), note: note.trim() || null, status: 'pending' })
+      .from('submissions')
+      .insert({ user_id: userId, lesson_id: lessonId, course_id: courseId, kind: 'link', lesson_type: lessonType, submission_url: url.trim(), note: note.trim() || null, status: 'pending' })
       .select('id, submission_url, note, status, feedback')
       .single();
     if (insertError) { setError(insertError.message); setSubmitting(false); return; }
     setLatest(data);
     setSubmitting(false);
+    // Alert reviewers so the submission doesn't sit unreviewed (the capstone
+    // relies on this — it's the only signal an admin gets for a link submission).
+    notify({ adminBroadcast: true, type: 'project_submitted', title: 'New submission for review', message: 'A student submitted work for review.', link: '/admin' });
   };
 
   if (isCompleted) {
@@ -109,7 +115,7 @@ export default function LessonSubmission({ lessonId, userId, trackColor, isCompl
     <div style={{ marginTop: '1.5rem', padding: '20px 24px', borderRadius: 12, background: '#22262B', border: '1px solid #2A2F35' }}>
       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: trackColor, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 14 }}>Submit for review</div>
 
-      {latest?.status === 'rejected' && (
+      {latest?.status === 'changes_requested' && (
         <div style={{ padding: '12px 16px', borderRadius: 10, marginBottom: 16, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)' }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#F87171', marginBottom: 4 }}>Changes requested</div>
           {latest.feedback && <div style={{ fontSize: 13, color: '#E5E7EB' }}>{latest.feedback}</div>}
