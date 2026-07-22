@@ -57,11 +57,28 @@ export default function CertificateViewPage() {
         setTracks(map);
       }
 
-      const certificateResponse = await fetch(`/api/certificates/${encodeURIComponent(certId)}`);
-      if (certificateResponse.ok) {
-        const payload = await certificateResponse.json();
-        setCert(payload.certificate as CertData);
-        setCreators((payload.creators || []) as CreatorProfile[]);
+      let certificateLoaded = false;
+      try {
+        const certificateResponse = await fetch(`/api/certificates/${encodeURIComponent(certId)}`);
+        if (certificateResponse.ok) {
+          const payload = await certificateResponse.json();
+          setCert(payload.certificate as CertData);
+          setCreators((payload.creators || []) as CreatorProfile[]);
+          certificateLoaded = true;
+        }
+      } catch (error) {
+        console.error('Server certificate lookup failed:', error);
+      }
+
+      // A valid certificate must remain viewable even if the server endpoint or
+      // instructor lookup is temporarily unavailable.
+      if (!certificateLoaded) {
+        const { data: fallbackCertificate } = await supabase
+          .from('certificates')
+          .select('*, profiles(full_name), courses(title, track, level, created_by, instructor_ids)')
+          .eq('cert_id', certId)
+          .single();
+        if (fallbackCertificate) setCert(fallbackCertificate as CertData);
       }
 
       const { data: signedData } = await supabase.storage

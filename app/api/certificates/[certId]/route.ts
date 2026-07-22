@@ -7,17 +7,24 @@ export async function GET(
 ) {
   const { certId } = await params;
   const supabase = createServiceClient();
-  const { data, error } = await supabase
+  const { data: certificate, error } = await supabase
     .from('certificates')
-    .select('cert_id, issued_at, profiles(full_name), courses(title, track, level, created_by, instructor_ids)')
+    .select('cert_id, issued_at, user_id, course_id')
     .eq('cert_id', certId)
     .single();
 
-  if (error || !data) {
+  if (error || !certificate) {
     return Response.json({ error: 'Certificate not found' }, { status: 404 });
   }
 
-  const course = Array.isArray(data.courses) ? data.courses[0] : data.courses;
+  const [{ data: recipient }, { data: course, error: courseError }] = await Promise.all([
+    supabase.from('profiles').select('full_name').eq('id', certificate.user_id).single(),
+    supabase.from('courses').select('title, track, level, created_by, instructor_ids').eq('id', certificate.course_id).single(),
+  ]);
+  if (courseError || !course) {
+    return Response.json({ error: 'Certificate course not found' }, { status: 404 });
+  }
+
   const instructorIds: string[] = course?.instructor_ids?.length
     ? course.instructor_ids
     : [course?.created_by].filter(Boolean) as string[];
@@ -31,5 +38,13 @@ export async function GET(
     .filter(Boolean)
     .map(profile => ({ full_name: profile!.full_name, position: profile!.position }));
 
-  return Response.json({ certificate: data, creators });
+  return Response.json({
+    certificate: {
+      cert_id: certificate.cert_id,
+      issued_at: certificate.issued_at,
+      profiles: { full_name: recipient?.full_name || '' },
+      courses: course,
+    },
+    creators,
+  });
 }
