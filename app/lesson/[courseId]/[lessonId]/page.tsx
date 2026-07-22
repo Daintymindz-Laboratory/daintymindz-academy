@@ -350,7 +350,7 @@ export default function LessonPage() {
         ) : lessonType === 'quiz' ? (
           <div className="dm-lesson-main">
             <div style={{ flex: 1, overflowY: 'auto' }}>
-              <QuizLesson lessonId={Number(currentLesson.id)} userId={userId} trackColor={trackColor} introduction={currentLesson.content || ''} isCompleted={isCompleted} onComplete={markComplete} />
+              <QuizLesson key={currentLesson.id} lessonId={Number(currentLesson.id)} userId={userId} trackColor={trackColor} introduction={currentLesson.content || ''} isCompleted={isCompleted} onComplete={markComplete} />
             </div>
             {simpleNavBar}
           </div>

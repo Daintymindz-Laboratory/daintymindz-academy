@@ -13,6 +13,10 @@ interface QuizQuestion {
   explanation: string | null;
 }
 
+type QuizQuestionRow = Omit<QuizQuestion, 'options'> & {
+  options: string[] | string | null;
+};
+
 interface Props {
   lessonId: number;
   userId: string;
@@ -32,6 +36,8 @@ export default function QuizLesson({ lessonId, userId, trackColor, introduction,
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
     const load = async () => {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
@@ -40,8 +46,9 @@ export default function QuizLesson({ lessonId, userId, trackColor, introduction,
         .select('*')
         .eq('lesson_id', lessonId)
         .order('order_index');
+      if (cancelled) return;
       setQuestions(
-        (data || []).map((q: any) => ({
+        ((data || []) as QuizQuestionRow[]).map(q => ({
           ...q,
           options: Array.isArray(q.options) ? q.options : JSON.parse(q.options || '[]'),
         }))
@@ -49,6 +56,10 @@ export default function QuizLesson({ lessonId, userId, trackColor, introduction,
       setLoading(false);
     };
     load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [lessonId]);
 
   const submit = async () => {
