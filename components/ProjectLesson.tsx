@@ -151,7 +151,7 @@ export default function ProjectLesson({
       setSubmission(data);
       setShowSubmitForm(false);
       setSubmitNote('');
-      notify({ adminBroadcast: true, type: 'project_submitted', title: 'New project submission', message: 'A student submitted a project for review.', link: '/admin' });
+      notify({ adminBroadcast: true, excludeUserId: userId, type: 'project_submitted', title: 'New project submission', message: 'A student submitted a project for review.', link: '/admin' });
     }
     setSubmitting(false);
   };

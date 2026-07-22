@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { notify } from '@/lib/notify';
 
 interface Submission {
   id: number;
@@ -86,6 +87,13 @@ export default function LessonSubmission({ lessonId, userId, trackColor, isCompl
     if (insertError) { setError(submissionErrorMessage(insertError)); setSubmitting(false); return; }
     setLatest(data);
     setSubmitting(false);
+    notify({
+      adminBroadcast: true,
+      type: 'project_submitted',
+      title: 'New task submission',
+      message: 'A student submitted a task for instructor review.',
+      link: '/admin',
+    });
   };
 
   if (isCompleted) {

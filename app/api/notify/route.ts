@@ -35,12 +35,12 @@ async function sendEmail(to: string, subject: string, message: string, link?: st
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, adminBroadcast, type, title, message, link } = await req.json();
+    const { userId, adminBroadcast, excludeUserId, type, title, message, link } = await req.json();
     const supabase = createServiceClient();
 
     if (adminBroadcast) {
       const { data: admins } = await supabase.from('profiles').select('id').eq('is_admin', true);
-      for (const admin of admins || []) {
+      for (const admin of (admins || []).filter(admin => admin.id !== excludeUserId)) {
         await supabase.from('notifications').insert({ user_id: admin.id, type, title, message, link });
         const { data: { user } } = await supabase.auth.admin.getUserById(admin.id);
         if (user?.email) await sendEmail(user.email, title, message, link);

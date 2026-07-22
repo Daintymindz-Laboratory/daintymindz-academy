@@ -280,8 +280,10 @@ export default function AdminPage() {
     }
     if (status === 'approved') {
       notify({ userId: selectedSubmission.user_id, type: 'submission_approved', title: 'Submission approved!', message: `Your project for "${selectedSubmission.lesson_title}" has been approved. Great work!`, link: `/lesson/${selectedSubmission.course_id}/${selectedSubmission.lesson_id}` });
+      notify({ adminBroadcast: true, excludeUserId: selectedSubmission.user_id, type: 'submission_approved', title: 'Submission approved', message: `${selectedSubmission.student_name}'s submission for "${selectedSubmission.lesson_title}" was approved.`, link: '/admin' });
     } else {
       notify({ userId: selectedSubmission.user_id, type: 'submission_rework', title: 'Submission needs rework', message: `Your project for "${selectedSubmission.lesson_title}" needs some changes. Feedback: ${gradingFeedback.trim()}`, link: `/lesson/${selectedSubmission.course_id}/${selectedSubmission.lesson_id}` });
+      notify({ adminBroadcast: true, excludeUserId: selectedSubmission.user_id, type: 'submission_rework', title: 'Submission returned for rework', message: `${selectedSubmission.student_name}'s submission for "${selectedSubmission.lesson_title}" was returned for changes.`, link: '/admin' });
     }
     await loadSubmissions(supabase);
     setSelectedSubmission(null);

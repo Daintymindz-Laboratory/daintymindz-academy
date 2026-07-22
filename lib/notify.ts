@@ -1,6 +1,7 @@
 export async function notify(payload: {
   userId?: string;
   adminBroadcast?: boolean;
+  excludeUserId?: string;
   type: string;
   title: string;
   message: string;
