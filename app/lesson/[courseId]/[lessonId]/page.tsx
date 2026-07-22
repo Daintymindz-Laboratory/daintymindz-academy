@@ -213,11 +213,17 @@ export default function LessonPage() {
     }
 
     if (newCompleted.length === lessons.length) {
-      const certId = `CERT-DM-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-      await supabase.from('certificates').insert({ user_id: userId, course_id: parseInt(courseId), cert_id: certId });
-      notify({ userId, type: 'course_completed', title: 'Course completed!', message: `Congratulations! You completed "${course?.title}" and earned a certificate.`, link: '/certificates' });
-      notify({ adminBroadcast: true, type: 'course_completed', title: 'Student completed a course', message: `A student completed "${course?.title}".`, link: '/admin' });
-      setShowRating(true);
+      const { data: existingCert } = await supabase
+        .from('certificates').select('id').eq('user_id', userId).eq('course_id', parseInt(courseId)).maybeSingle();
+      if (!existingCert) {
+        const certId = `CERT-DM-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        await supabase.from('certificates').insert({ user_id: userId, course_id: parseInt(courseId), cert_id: certId });
+        notify({ userId, type: 'course_completed', title: 'Course completed!', message: `Congratulations! You completed "${course?.title}" and earned a certificate.`, link: '/certificates' });
+        notify({ adminBroadcast: true, type: 'course_completed', title: 'Student completed a course', message: `A student completed "${course?.title}".`, link: '/admin' });
+        setShowRating(true);
+      } else {
+        window.location.href = '/certificates';
+      }
     } else {
       // Gated lesson types (quiz, mini_project) stay on the current lesson
       // after passing so the student can review their work. The Next button
