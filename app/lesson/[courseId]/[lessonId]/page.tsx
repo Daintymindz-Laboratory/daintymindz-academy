@@ -13,6 +13,7 @@ import NotificationBell from '@/components/NotificationBell';
 import CourseComments from '@/components/CourseComments';
 import MessageCenter from '@/components/MessageCenter';
 import CourseRating from '@/components/CourseRating';
+import DiscussionPromptLesson from '@/components/DiscussionPromptLesson';
 
 
 type Lesson = {
@@ -46,6 +47,7 @@ const TYPE_COLORS: Record<string, string> = {
   quiz: '#4E8FD4',
   mini_project: '#E86F4E',
   assessment: '#4E8FD4',
+  discussion: '#42B8A6',
   lesson: '#D59C10',
 };
 
@@ -228,7 +230,7 @@ export default function LessonPage() {
       // Gated lesson types (quiz, mini_project) stay on the current lesson
       // after passing so the student can review their work. The Next button
       // becomes enabled once isCompleted is true.
-      const gated = ['quiz', 'mini_project', 'project'];
+      const gated = ['quiz', 'mini_project', 'project', 'discussion'];
       if (nextLesson && !gated.includes(currentLesson.type)) switchLesson(nextLesson);
     }
   };
@@ -249,7 +251,7 @@ export default function LessonPage() {
   const embedUrl = getVideoEmbed(currentLesson.video_url || '');
   const lessonType = currentLesson.type;
   const typeColor = TYPE_COLORS[lessonType] || '#D59C10';
-  const GATED_TYPES = ['quiz', 'mini_project'];
+  const GATED_TYPES = ['quiz', 'mini_project', 'discussion'];
   const needsPass = GATED_TYPES.includes(lessonType) || currentLesson.requires_review;
   const canProceed = !needsPass || isCompleted;
 
@@ -262,7 +264,9 @@ export default function LessonPage() {
         <span style={{ fontSize: 12, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textAlign: 'center' }}>
           {currentLesson.requires_review
             ? 'Submit your work and wait for approval to continue'
-            : `Pass this ${lessonType === 'quiz' ? 'quiz' : 'mini project'} to continue`}
+            : lessonType === 'discussion'
+              ? 'Post a response to continue'
+              : `Pass this ${lessonType === 'quiz' ? 'quiz' : 'mini project'} to continue`}
         </span>
       )}
       {!needsPass && <div />}
@@ -357,6 +361,20 @@ export default function LessonPage() {
         ) : lessonType === 'mini_project' ? (
           <div className="dm-lesson-main">
             <MiniProjectLesson key={currentLesson.id} lessonId={Number(currentLesson.id)} courseId={Number(courseId)} userId={userId} trackColor={trackColor} starterCode={currentLesson.starter_code || ''} instructions={currentLesson.instructions || ''} isCompleted={isCompleted} onComplete={markComplete} />
+            {simpleNavBar}
+          </div>
+        ) : lessonType === 'discussion' ? (
+          <div className="dm-lesson-main">
+            <DiscussionPromptLesson
+              key={currentLesson.id}
+              courseId={Number(courseId)}
+              lessonId={Number(currentLesson.id)}
+              userId={userId}
+              prompt={currentLesson.content || ''}
+              trackColor={trackColor}
+              isCompleted={isCompleted}
+              onComplete={markComplete}
+            />
             {simpleNavBar}
           </div>
         ) : (

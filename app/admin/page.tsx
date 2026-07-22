@@ -968,6 +968,7 @@ export default function AdminPage() {
                               <option value="quiz">Quiz (auto-graded, 80% pass)</option>
                               <option value="mini_project">Mini Project (code + test cases)</option>
                               <option value="assessment">Assessment (markdown)</option>
+                              <option value="discussion">Discussion Prompt (response required)</option>
                             </select>
                           </div>
                           <div>
@@ -1099,10 +1100,11 @@ export default function AdminPage() {
                           </>
                         )}
 
-                        {/* ASSESSMENT type fields */}
-                        {editingLesson.type === 'assessment' && (
+                        {/* ASSESSMENT / DISCUSSION type fields */}
+                        {(editingLesson.type === 'assessment' || editingLesson.type === 'discussion') && (
                           <div data-color-mode="dark">
-                            <label style={{ ...labelStyle, marginBottom: 10 }}>Assessment Content, Markdown supported</label>
+                            <label style={{ ...labelStyle, marginBottom: 10 }}>{editingLesson.type === 'discussion' ? 'Discussion Prompt' : 'Assessment Content'}, Markdown supported</label>
+                            {editingLesson.type === 'discussion' && <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 8 }}>Learners must post a response before the Next button becomes available.</div>}
                             <MDEditor
                               value={editingLesson.content}
                               onChange={val => setEditingLesson(p => p ? ({ ...p, content: val || '' }) : p)}
@@ -1286,7 +1288,7 @@ export default function AdminPage() {
                         </div>
 
                         {/* Requires-review toggle */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {editingLesson.type !== 'discussion' && <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           <div onClick={() => setEditingLesson(p => p ? ({ ...p, requires_review: !p.requires_review }) : p)}
                             style={{
                               width: 44, height: 24, borderRadius: 12, cursor: 'pointer',
@@ -1305,7 +1307,7 @@ export default function AdminPage() {
                               ? 'Requires admin review before completion'
                               : 'Completes without review (self-marked, or auto-graded for quiz/mini project)'}
                           </span>
-                        </div>
+                        </div>}
                       </div>
 
                       <div style={{ display: 'flex', gap: 10, marginTop: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1346,7 +1348,7 @@ export default function AdminPage() {
                         display: 'flex', alignItems: 'center', gap: 16,
                       }}>
                         {(() => {
-                          const tc: Record<string, string> = { project: '#9B6FD4', quiz: '#4E8FD4', mini_project: '#E86F4E', assessment: '#4E8FD4', lesson: '#D59C10' };
+                          const tc: Record<string, string> = { project: '#9B6FD4', quiz: '#4E8FD4', mini_project: '#E86F4E', assessment: '#4E8FD4', discussion: '#42B8A6', lesson: '#D59C10' };
                           const c = tc[lesson.type] || '#D59C10';
                           return (
                             <div style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: `${c}15`, border: `1px solid ${c}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700, color: c }}>{idx + 1}</div>
@@ -1356,7 +1358,7 @@ export default function AdminPage() {
                           <div style={{ fontSize: 15, fontWeight: 600, color: '#F5F5F5', marginBottom: 3 }}>{lesson.title}</div>
                           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                             {(() => {
-                              const tc: Record<string, string> = { project: '#9B6FD4', quiz: '#4E8FD4', mini_project: '#E86F4E', assessment: '#4E8FD4', lesson: '#D59C10' };
+                              const tc: Record<string, string> = { project: '#9B6FD4', quiz: '#4E8FD4', mini_project: '#E86F4E', assessment: '#4E8FD4', discussion: '#42B8A6', lesson: '#D59C10' };
                               const c = tc[lesson.type] || '#D59C10';
                               return (
                                 <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em', background: `${c}15`, color: c }}>{lesson.type.replace('_', ' ').toUpperCase()}</span>

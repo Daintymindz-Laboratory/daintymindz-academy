@@ -42,6 +42,7 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
       .from('course_comments')
       .select('*')
       .eq('course_id', courseId)
+      .is('lesson_id', null)
       .order('created_at', { ascending: true });
     if (!commentsData || commentsData.length === 0) { setComments([]); return; }
 
@@ -58,7 +59,7 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
     try {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
-      const { error } = await supabase.from('course_comments').insert({ course_id: courseId, user_id: userId, parent_id: null, content: newComment.trim() });
+      const { error } = await supabase.from('course_comments').insert({ course_id: courseId, lesson_id: null, user_id: userId, parent_id: null, content: newComment.trim() });
       if (error) {
         console.error('comment insert error:', error);
         setPostError('Could not post comment. ' + (error.message || 'Please try again.'));
@@ -78,7 +79,7 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
     try {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
-      const { error } = await supabase.from('course_comments').insert({ course_id: courseId, user_id: userId, parent_id: parentId, content: replyText.trim() });
+      const { error } = await supabase.from('course_comments').insert({ course_id: courseId, lesson_id: null, user_id: userId, parent_id: parentId, content: replyText.trim() });
       if (error) {
         console.error('reply insert error:', error);
         setPostError('Could not post reply. ' + (error.message || 'Please try again.'));
