@@ -58,9 +58,18 @@ export default function CertificateViewPage() {
       }
 
       let certificateLoaded = false;
+      const { data: publicCertificate } = await supabase.rpc('get_public_certificate', { p_cert_id: certId });
+      if (publicCertificate?.certificate) {
+        setCert(publicCertificate.certificate as CertData);
+        setCreators((publicCertificate.creators || []) as CreatorProfile[]);
+        certificateLoaded = true;
+      }
+
       try {
-        const certificateResponse = await fetch(`/api/certificates/${encodeURIComponent(certId)}`);
-        if (certificateResponse.ok) {
+        const certificateResponse = certificateLoaded
+          ? null
+          : await fetch(`/api/certificates/${encodeURIComponent(certId)}`);
+        if (certificateResponse?.ok) {
           const payload = await certificateResponse.json();
           setCert(payload.certificate as CertData);
           setCreators((payload.creators || []) as CreatorProfile[]);
