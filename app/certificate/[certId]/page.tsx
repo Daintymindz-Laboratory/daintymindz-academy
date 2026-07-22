@@ -3,7 +3,6 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { QRCodeCanvas as QRCode } from 'qrcode.react';
-import Head from 'next/head';
 import { FALLBACK_TRACKS } from '@/lib/user-context';
 
 type CertData = {
@@ -58,26 +57,11 @@ export default function CertificateViewPage() {
         setTracks(map);
       }
 
-      const { data } = await supabase
-        .from('certificates')
-        .select('*, profiles(full_name), courses(title, track, level, created_by, instructor_ids)')
-        .eq('cert_id', certId)
-        .single();
-      if (data) {
-        setCert(data);
-        const instructorIds = data.courses?.instructor_ids?.length
-          ? data.courses.instructor_ids
-          : [data.courses?.created_by].filter(Boolean);
-        if (instructorIds.length > 0) {
-          const { data: creatorData } = await supabase
-            .from('profiles')
-            .select('id, full_name, position')
-            .in('id', instructorIds);
-          if (creatorData) {
-            const byId = new Map(creatorData.map(profile => [profile.id, profile]));
-            setCreators(instructorIds.map((id: string) => byId.get(id)).filter(Boolean) as CreatorProfile[]);
-          }
-        }
+      const certificateResponse = await fetch(`/api/certificates/${encodeURIComponent(certId)}`);
+      if (certificateResponse.ok) {
+        const payload = await certificateResponse.json();
+        setCert(payload.certificate as CertData);
+        setCreators((payload.creators || []) as CreatorProfile[]);
       }
 
       const { data: signedData } = await supabase.storage
