@@ -86,6 +86,19 @@ export default function QuizLesson({ lessonId, userId, trackColor, introduction,
     );
   }
 
+  if (isCompleted && !submitted) {
+    return (
+      <div style={{ padding: '2rem 2.5rem', maxWidth: 720, margin: '0 auto', width: '100%' }}>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: trackColor, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 24 }}>Quiz</div>
+        <div style={{ padding: '32px 28px', borderRadius: 16, background: 'rgba(76,175,125,0.06)', border: '1px solid rgba(76,175,125,0.25)', textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>✓</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: '#4CAF7D', marginBottom: 8 }}>Quiz Passed</div>
+          <div style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.6 }}>You have already completed this quiz. Continue to the next lesson.</div>
+        </div>
+      </div>
+    );
+  }
+
   if (questions.length === 0) {
     return (
       <div style={{ padding: '3rem', textAlign: 'center', color: '#6B7280', fontSize: 14 }}>
