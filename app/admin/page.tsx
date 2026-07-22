@@ -218,32 +218,44 @@ export default function AdminPage() {
 
   const loadSubmissions = async (supabase: any) => {
     const { data, error } = await supabase
-      .from('project_submissions')
+      .from('lesson_submissions')
       .select('*')
-      .order('submitted_at', { ascending: false });
+      .order('created_at', { ascending: false });
     if (error) { console.error('loadSubmissions error:', error); return; }
     if (!data || data.length === 0) { setSubmissions([]); setPendingCount(0); return; }
 
     const lessonIds = [...new Set(data.map((s: any) => s.lesson_id as number))];
 
-    const [{ data: profilesData }, { data: coursesData }, { data: lessonsData }] = await Promise.all([
+    const { data: lessonsData } = await supabase.from('lessons').select('id, title, course_id, type').in('id', lessonIds);
+    const courseIds = [...new Set((lessonsData || []).map((lesson: any) => lesson.course_id as number))];
+    const [{ data: profilesData }, { data: coursesData }] = await Promise.all([
       supabase.from('profiles').select('id, full_name'),
-      supabase.from('courses').select('id, title, created_by'),
-      supabase.from('lessons').select('id, title').in('id', lessonIds),
+      supabase.from('courses').select('id, title, created_by, instructor_ids').in('id', courseIds),
     ]);
 
     const profileMap: Record<string, string> = Object.fromEntries((profilesData || []).map((p: any) => [p.id, p.full_name || 'Unknown']));
     const courseMap: Record<number, { title: string; instructor: string }> = Object.fromEntries(
-      (coursesData || []).map((c: any) => [c.id, { title: c.title, instructor: profileMap[c.created_by] || 'Unknown' }])
+      (coursesData || []).map((c: any) => {
+        const ids: string[] = c.instructor_ids?.length ? c.instructor_ids : [c.created_by].filter(Boolean);
+        return [c.id, { title: c.title, instructor: ids.map(id => profileMap[id]).filter(Boolean).join(', ') || 'Unknown' }];
+      })
     );
-    const lessonMap: Record<number, string> = Object.fromEntries((lessonsData || []).map((l: any) => [l.id, l.title]));
+    const lessonMap: Record<number, { title: string; courseId: number; type: string }> = Object.fromEntries(
+      (lessonsData || []).map((l: any) => [l.id, { title: l.title, courseId: l.course_id, type: l.type }])
+    );
 
     const mapped = data.map((s: any) => ({
       ...s,
+      course_id: lessonMap[s.lesson_id]?.courseId,
+      lesson_type: lessonMap[s.lesson_id]?.type || 'project',
+      submitted_code: s.submission_url,
+      notes: s.note,
+      submitted_at: s.created_at,
+      status: s.status === 'rejected' ? 'rework' : s.status,
       student_name: profileMap[s.user_id] || 'Unknown',
-      course_title: courseMap[s.course_id]?.title || '',
-      course_instructor: courseMap[s.course_id]?.instructor || '',
-      lesson_title: lessonMap[s.lesson_id] || '',
+      course_title: courseMap[lessonMap[s.lesson_id]?.courseId]?.title || '',
+      course_instructor: courseMap[lessonMap[s.lesson_id]?.courseId]?.instructor || '',
+      lesson_title: lessonMap[s.lesson_id]?.title || '',
     }));
     setSubmissions(mapped);
     setPendingCount(mapped.filter((s: any) => s.status === 'pending').length);
@@ -255,8 +267,9 @@ export default function AdminPage() {
     setGrading(true);
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
-    const { error } = await supabase.from('project_submissions')
-      .update({ status, feedback: gradingFeedback.trim() || null, reviewed_at: new Date().toISOString(), reviewed_by: adminId })
+    const databaseStatus = status === 'rework' ? 'rejected' : status;
+    const { error } = await supabase.from('lesson_submissions')
+      .update({ status: databaseStatus, feedback: gradingFeedback.trim() || null, reviewed_at: new Date().toISOString(), reviewed_by: adminId })
       .eq('id', selectedSubmission.id);
     if (error) { showToast(`Error: ${error.message}`); setGrading(false); return; }
     if (status === 'approved') {
