@@ -22,6 +22,7 @@ type Course = {
   description: string;
   progress: number;
   resumeLessonId: number | null;
+  firstLessonId: number | null;
 };
 
 export default function MyCoursesPage() {
@@ -101,6 +102,7 @@ export default function MyCoursesPage() {
           ...e.courses,
           progress: progressMap[e.course_id]?.percentage || 0,
           resumeLessonId: resumeMap[e.course_id] || null,
+          firstLessonId: (lessonsData || []).find((l: any) => l.course_id === e.course_id)?.id || null,
         })));
       }
 
@@ -126,6 +128,9 @@ export default function MyCoursesPage() {
     setUnenrolling(null);
     setConfirmId(null);
   };
+
+  const activeCourses = courses.filter(course => course.progress < 100);
+  const completedCourses = courses.filter(course => course.progress >= 100);
 
   if (loading) return (
     <div style={{ background: '#1A1D21', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -215,8 +220,35 @@ export default function MyCoursesPage() {
               }}>Browse catalog</a>
             </div>
           ) : (
-            <div className="dm-grid-3">
-              {courses.map(course => {
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+              {[
+                {
+                  key: 'active',
+                  title: 'In Progress',
+                  description: 'Continue learning where you left off.',
+                  courses: activeCourses,
+                  completed: false,
+                },
+                {
+                  key: 'completed',
+                  title: 'Completed Courses',
+                  description: 'Courses you have successfully completed.',
+                  courses: completedCourses,
+                  completed: true,
+                },
+              ].filter(section => section.courses.length > 0).map(section => (
+                <section key={section.key}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 16 }}>
+                    <div>
+                      <h2 style={{ fontSize: 18, fontWeight: 700, color: section.completed ? '#4CAF7D' : '#F5F5F5', marginBottom: 4 }}>{section.title}</h2>
+                      <p style={{ fontSize: 13, color: '#6B7280' }}>{section.description}</p>
+                    </div>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: section.completed ? '#4CAF7D' : '#6B7280' }}>
+                      {section.courses.length} course{section.courses.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <div className="dm-grid-3">
+              {section.courses.map(course => {
                 const track = tracks[course.track] ?? TRACK_FALLBACK;
                 const level = levelColors[course.level];
                 return (
@@ -250,6 +282,9 @@ export default function MyCoursesPage() {
                         padding: '3px 10px', borderRadius: 20,
                         fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.06em',
                       }}>{course.level}</span>
+                      {section.completed && (
+                        <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: '#4CAF7D', background: 'rgba(76,175,125,0.1)', border: '1px solid rgba(76,175,125,0.3)', padding: '3px 10px', borderRadius: 20, fontFamily: 'JetBrains Mono, monospace' }}>✓ COMPLETED</span>
+                      )}
                     </div>
 
                     <div>
@@ -280,22 +315,32 @@ export default function MyCoursesPage() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => {
-                        const lessonId = course.resumeLessonId || 'start';
-                        window.location.href = `/lesson/${course.id}/${lessonId}`;
-                      }}
-                      style={{
-                        padding: '10px 0', borderRadius: 50,
-                        background: course.progress > 0 ? 'rgba(213,156,16,0.08)' : '#D59C10',
-                        border: course.progress > 0 ? '1px solid rgba(213,156,16,0.3)' : 'none',
-                        color: course.progress > 0 ? '#D59C10' : '#1A1D21',
-                        fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                        fontFamily: 'DM Sans, sans-serif', transition: 'all 0.2s',
-                      }}
-                    >
-                      {course.progress === 100 ? 'Review course' : course.progress > 0 ? 'Continue' : 'Start course'}
-                    </button>
+                    {section.completed ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ padding: '10px 0', borderRadius: 50, textAlign: 'center', background: 'rgba(76,175,125,0.1)', border: '1px solid rgba(76,175,125,0.3)', color: '#4CAF7D', fontSize: 13, fontWeight: 700 }}>✓ Course Completed</div>
+                        <button
+                          onClick={() => { window.location.href = `/lesson/${course.id}/${course.firstLessonId || 'start'}`; }}
+                          style={{ padding: '9px 0', borderRadius: 50, background: 'transparent', border: '1px solid #3A3F46', color: '#9CA3AF', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}
+                        >Review from beginning</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          const lessonId = course.resumeLessonId || 'start';
+                          window.location.href = `/lesson/${course.id}/${lessonId}`;
+                        }}
+                        style={{
+                          padding: '10px 0', borderRadius: 50,
+                          background: course.progress > 0 ? 'rgba(213,156,16,0.08)' : '#D59C10',
+                          border: course.progress > 0 ? '1px solid rgba(213,156,16,0.3)' : 'none',
+                          color: course.progress > 0 ? '#D59C10' : '#1A1D21',
+                          fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                          fontFamily: 'DM Sans, sans-serif', transition: 'all 0.2s',
+                        }}
+                      >
+                        {course.progress > 0 ? 'Continue' : 'Start course'}
+                      </button>
+                    )}
 
                     {confirmId === course.id ? (
                       <div style={{ display: 'flex', gap: 8 }}>
@@ -344,6 +389,9 @@ export default function MyCoursesPage() {
                   </div>
                 );
               })}
+                  </div>
+                </section>
+              ))}
             </div>
           )}
         </main>
