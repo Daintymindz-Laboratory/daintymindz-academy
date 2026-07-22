@@ -18,6 +18,7 @@ type Course = {
   duration: string;
   description: string;
   created_by?: string | null;
+  instructor_ids?: string[];
 };
 
 type Profile = {
@@ -482,6 +483,10 @@ export default function AdminPage() {
     setSaving(true);
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
+    const instructorIds = editingCourse.instructor_ids?.length
+      ? editingCourse.instructor_ids
+      : [editingCourse.created_by || adminId].filter(Boolean);
+    const primaryInstructorId = instructorIds[0] || adminId;
     if (editingCourse.id) {
       await supabase.from('courses').update({
         title: editingCourse.title,
@@ -490,7 +495,8 @@ export default function AdminPage() {
         lessons_count: editingCourse.lessons_count,
         duration: editingCourse.duration,
         description: editingCourse.description,
-        created_by: editingCourse.created_by || adminId,
+        created_by: primaryInstructorId,
+        instructor_ids: instructorIds,
       }).eq('id', editingCourse.id);
       showToast('Course updated!');
     } else {
@@ -501,7 +507,8 @@ export default function AdminPage() {
         lessons_count: editingCourse.lessons_count,
         duration: editingCourse.duration,
         description: editingCourse.description,
-        created_by: editingCourse.created_by || adminId,
+        created_by: primaryInstructorId,
+        instructor_ids: instructorIds,
       });
       showToast('Course created!');
     }
@@ -746,13 +753,36 @@ export default function AdminPage() {
                       <label style={labelStyle}>Duration</label>
                       <input style={inputStyle} value={editingCourse.duration} onChange={e => setEditingCourse(p => ({ ...p, duration: e.target.value }))} placeholder="e.g. 4h 30m" />
                     </div>
-                    <div>
-                      <label style={labelStyle}>Course Creator (for certificate)</label>
-                      <select style={{ ...inputStyle, cursor: 'pointer' }} value={editingCourse.created_by || adminId} onChange={e => setEditingCourse(p => ({ ...p, created_by: e.target.value }))}>
-                        {adminProfiles.map(a => (
-                          <option key={a.id} value={a.id}>{a.full_name}{a.position ? ` (${a.position})` : ''}</option>
-                        ))}
-                      </select>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <label style={labelStyle}>Course Instructors (certificate signatories)</label>
+                      <div style={{ ...inputStyle, height: 'auto', minHeight: 46, padding: '10px 14px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+                        {adminProfiles.map(a => {
+                          const selectedIds = editingCourse.instructor_ids?.length
+                            ? editingCourse.instructor_ids
+                            : [editingCourse.created_by || adminId].filter(Boolean);
+                          const checked = selectedIds.includes(a.id);
+                          return (
+                            <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 9, color: checked ? '#F5F5F5' : '#9CA3AF', fontSize: 13, cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => setEditingCourse(p => {
+                                  const current = p.instructor_ids?.length
+                                    ? p.instructor_ids
+                                    : [p.created_by || adminId].filter(Boolean);
+                                  const instructor_ids = current.includes(a.id)
+                                    ? current.filter(id => id !== a.id)
+                                    : [...current, a.id];
+                                  return { ...p, instructor_ids, created_by: instructor_ids[0] || null };
+                                })}
+                                style={{ accentColor: '#D59C10' }}
+                              />
+                              <span>{a.full_name}{a.position ? ` (${a.position})` : ''}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <div style={{ marginTop: 6, fontSize: 11, color: '#6B7280' }}>Each selected instructor will sign the certificate. The first selected instructor remains the primary course owner.</div>
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={labelStyle}>Description *</label>
@@ -785,6 +815,13 @@ export default function AdminPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {courses.map(course => {
                   const track = tracksMap[course.track];
+                  const instructorIds = course.instructor_ids?.length
+                    ? course.instructor_ids
+                    : [course.created_by].filter(Boolean) as string[];
+                  const instructorNames = instructorIds
+                    .map(id => adminProfiles.find(profile => profile.id === id)?.full_name)
+                    .filter(Boolean)
+                    .join(', ');
                   return (
                     <div key={course.id} style={{
                       background: '#22262B', border: '1px solid #2A2F35',
@@ -804,6 +841,9 @@ export default function AdminPage() {
                         <div style={{ fontSize: 12, color: '#6B7280' }}>
                           {track?.label} · {course.level} · {course.lessons_count} lessons · {course.duration}
                         </div>
+                        {instructorNames && (
+                          <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>Instructors: {instructorNames}</div>
+                        )}
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                         <button onClick={() => openCourse(course)} style={{

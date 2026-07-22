@@ -15,6 +15,7 @@ type CertData = {
     track: string;
     level: string;
     created_by: string | null;
+    instructor_ids: string[] | null;
   };
 };
 
@@ -29,7 +30,7 @@ export default function CertificateViewPage() {
   const params = useParams();
   const certId = params.certId as string;
   const [cert, setCert] = useState<CertData | null>(null);
-  const [creator, setCreator] = useState<CreatorProfile | null>(null);
+  const [creators, setCreators] = useState<CreatorProfile[]>([]);
   const [sealUrl, setSealUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -59,18 +60,23 @@ export default function CertificateViewPage() {
 
       const { data } = await supabase
         .from('certificates')
-        .select('*, profiles(full_name), courses(title, track, level, created_by)')
+        .select('*, profiles(full_name), courses(title, track, level, created_by, instructor_ids)')
         .eq('cert_id', certId)
         .single();
       if (data) {
         setCert(data);
-        if (data.courses?.created_by) {
+        const instructorIds = data.courses?.instructor_ids?.length
+          ? data.courses.instructor_ids
+          : [data.courses?.created_by].filter(Boolean);
+        if (instructorIds.length > 0) {
           const { data: creatorData } = await supabase
             .from('profiles')
-            .select('full_name, position')
-            .eq('id', data.courses.created_by)
-            .single();
-          if (creatorData) setCreator(creatorData);
+            .select('id, full_name, position')
+            .in('id', instructorIds);
+          if (creatorData) {
+            const byId = new Map(creatorData.map(profile => [profile.id, profile]));
+            setCreators(instructorIds.map((id: string) => byId.get(id)).filter(Boolean) as CreatorProfile[]);
+          }
         }
       }
 
@@ -166,13 +172,17 @@ html, body { width: 297mm; height: 210mm; overflow: hidden; background: white; f
 
   <div class="divider"><div class="divider-line"></div><div class="diamond" style="width:4px;height:4px"></div><div class="divider-line"></div></div>
 
-  <div class="bottom">
-    <div style="text-align:center">
-      <div class="sig-name">${creator?.full_name || 'Daintymindz Academy'}</div>
-      <div class="sig-line"></div>
-      <div class="sig-label">${creator?.full_name || ''}</div>
-      <div class="sig-sub">${creator?.position || 'Course Instructor'}<br>Daintymindz Academy</div>
-    </div>
+  <div class="signatures" style="display:flex;justify-content:center;gap:28px;width:100%">
+    ${(creators.length ? creators : [{ full_name: 'Daintymindz Academy', position: 'Course Instructor' }]).map(instructor => `
+      <div style="text-align:center;flex:1;max-width:280px">
+        <div class="sig-name">${instructor.full_name}</div>
+        <div class="sig-line"></div>
+        <div class="sig-label">${instructor.full_name}</div>
+        <div class="sig-sub">${instructor.position || 'Course Instructor'}<br>Daintymindz Academy</div>
+      </div>
+    `).join('')}
+  </div>
+  <div class="bottom" style="grid-template-columns:1fr 1fr;max-width:600px">
     <div class="seal-col">
       ${sealUrl
         ? `<img src="${sealUrl}" class="seal" alt="Seal" />`
@@ -329,17 +339,21 @@ html, body { width: 297mm; height: 210mm; overflow: hidden; background: white; f
                 <div style={{ flex: 1, height: 1, background: '#E5E7EB' }} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, alignItems: 'end' }}>
-
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: 28, color: '#33383D', marginBottom: 4 }}>
-                    {creator?.full_name || 'Daintymindz Academy'}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 22 }}>
+                {(creators.length ? creators : [{ full_name: 'Daintymindz Academy', position: 'Course Instructor' }]).map((instructor, index) => (
+                  <div key={`${instructor.full_name}-${index}`} style={{ textAlign: 'center', flex: 1, maxWidth: 220 }}>
+                    <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: 28, color: '#33383D', marginBottom: 4 }}>
+                      {instructor.full_name}
+                    </div>
+                    <div style={{ height: 1, background: '#33383D', marginBottom: 6 }} />
+                    <div style={{ fontSize: 11, color: '#6B7280' }}>{instructor.full_name}</div>
+                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>{instructor.position || 'Course Instructor'}</div>
+                    <div style={{ fontSize: 10, color: '#9CA3AF' }}>Daintymindz Academy</div>
                   </div>
-                  <div style={{ height: 1, background: '#33383D', marginBottom: 6 }} />
-                  <div style={{ fontSize: 11, color: '#6B7280' }}>{creator?.full_name || ''}</div>
-                  <div style={{ fontSize: 10, color: '#9CA3AF' }}>{creator?.position || 'Course Instructor'}</div>
-                  <div style={{ fontSize: 10, color: '#9CA3AF' }}>Daintymindz Academy</div>
-                </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32, alignItems: 'end', maxWidth: 440, margin: '0 auto' }}>
 
                 <div style={{ textAlign: 'center' }}>
                   {sealUrl ? (
