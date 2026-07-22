@@ -32,6 +32,13 @@ const labelStyle = {
   fontFamily: 'JetBrains Mono, monospace',
 };
 
+function submissionErrorMessage(error: { code?: string; message: string }) {
+  if (error.code === '42P01' || error.code === 'PGRST205' || error.message.includes('schema cache')) {
+    return 'Submissions are temporarily unavailable because the review system has not been configured. Please contact an academy administrator.';
+  }
+  return error.message;
+}
+
 export default function LessonSubmission({ lessonId, userId, trackColor, isCompleted, onComplete }: Props) {
   const [loading, setLoading] = useState(!isCompleted);
   const [latest, setLatest] = useState<Submission | null>(null);
@@ -45,12 +52,13 @@ export default function LessonSubmission({ lessonId, userId, trackColor, isCompl
     const load = async () => {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
-      const { data } = await supabase
+      const { data, error: loadError } = await supabase
         .from('lesson_submissions')
         .select('id, submission_url, note, status, feedback')
         .eq('user_id', userId).eq('lesson_id', lessonId)
         .order('created_at', { ascending: false })
         .limit(1).maybeSingle();
+      if (loadError) setError(submissionErrorMessage(loadError));
       if (data) {
         setLatest(data);
         if (data.status === 'rejected') { setUrl(data.submission_url); setNote(data.note || ''); }
@@ -75,7 +83,7 @@ export default function LessonSubmission({ lessonId, userId, trackColor, isCompl
       .insert({ user_id: userId, lesson_id: lessonId, submission_url: url.trim(), note: note.trim() || null, status: 'pending' })
       .select('id, submission_url, note, status, feedback')
       .single();
-    if (insertError) { setError(insertError.message); setSubmitting(false); return; }
+    if (insertError) { setError(submissionErrorMessage(insertError)); setSubmitting(false); return; }
     setLatest(data);
     setSubmitting(false);
   };
