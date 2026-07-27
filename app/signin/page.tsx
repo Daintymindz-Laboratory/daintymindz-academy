@@ -1,5 +1,6 @@
 'use client';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useState } from 'react';
 
 export default function SignIn() {
@@ -21,13 +22,20 @@ export default function SignIn() {
     try {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (error) { setError(error.message); setLoading(false); return; }
-      window.location.href = '/dashboard';
-    } catch (err) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('approval_status')
+        .eq('id', signInData.user.id)
+        .maybeSingle();
+      window.location.href = profile?.approval_status && profile.approval_status !== 'approved'
+        ? '/pending-approval'
+        : '/dashboard';
+    } catch {
       setError('Something went wrong. Please try again.');
       setLoading(false);
     }
@@ -46,13 +54,13 @@ export default function SignIn() {
         padding: '0 1.5rem', height: 68,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
           <Image src="/logo.png" alt="Daintymindz" width={110} height={40} style={{ objectFit: 'contain' }} />
           <span style={{
             fontSize: 15, fontWeight: 300, color: '#6B7280',
             borderLeft: '1px solid #3A3F46', paddingLeft: 10,
           }} className="dm-nav-academy">Academy</span>
-        </a>
+        </Link>
 
         <a href="/signup" style={{ color: '#6B7280', fontSize: 14, textDecoration: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}>Sign up</a>
 

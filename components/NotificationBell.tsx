@@ -74,6 +74,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
     submission_approved: '✅',
     submission_rework: '↩️',
     course_completed: '🎓',
+    account_pending: '⏳',
+    account_approved: '✅',
+    account_rejected: '⛔',
     message: '💬',
   };
 

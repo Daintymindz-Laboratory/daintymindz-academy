@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
+  const response = NextResponse.next({
     request: { headers: request.headers },
   });
 
@@ -29,13 +29,33 @@ export async function middleware(request: NextRequest) {
   const protectedRoutes = ['/dashboard', '/catalog', '/lesson', '/project', '/certificate', '/certificates', '/admin', '/my-courses'];
   const isProtected = protectedRoutes.some(route => request.nextUrl.pathname.startsWith(route));
 
+  let approvalStatus: string | null = null;
+  if (user) {
+    const { data: profile, error: approvalError } = await supabase
+      .from('profiles')
+      .select('approval_status')
+      .eq('id', user.id)
+      .maybeSingle();
+    // If the migration has not reached Supabase yet, preserve existing access
+    // instead of locking out the entire Academy during deployment.
+    if (!approvalError) approvalStatus = profile?.approval_status || 'pending';
+  }
+
   if (isProtected && !user) {
     return NextResponse.redirect(new URL('/signin', request.url));
   }
 
+  if (isProtected && user && approvalStatus && approvalStatus !== 'approved') {
+    return NextResponse.redirect(new URL('/pending-approval', request.url));
+  }
+
+  if (request.nextUrl.pathname === '/pending-approval' && user && approvalStatus === 'approved') {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
   // Auth routes: redirect to dashboard if already logged in
   if ((request.nextUrl.pathname === '/signin' || request.nextUrl.pathname === '/signup') && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL(approvalStatus && approvalStatus !== 'approved' ? '/pending-approval' : '/dashboard', request.url));
   }
 
   return response;

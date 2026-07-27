@@ -27,6 +27,7 @@ type Profile = {
   email: string;
   track: string;
   created_at: string;
+  approval_status?: 'pending' | 'approved' | 'rejected';
 };
 
 type Lesson = {
@@ -102,6 +103,7 @@ export default function AdminPage() {
   const [savingTrack, setSavingTrack] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
   const [students, setStudents] = useState<Profile[]>([]);
+  const [updatingApproval, setUpdatingApproval] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<StudentDetail | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -300,6 +302,19 @@ export default function AdminPage() {
   const loadStudents = async (supabase: any) => {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (data) setStudents(data);
+  };
+
+  const setAccountApproval = async (student: Profile, status: 'approved' | 'rejected') => {
+    setUpdatingApproval(student.id);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { error } = await supabase.rpc('set_profile_approval', { p_user_id: student.id, p_status: status });
+    if (error) showToast(`Could not update access: ${error.message}`);
+    else {
+      await loadStudents(supabase);
+      showToast(`${student.full_name}'s access was ${status}.`);
+    }
+    setUpdatingApproval(null);
   };
 
   const loadAnalytics = async (supabase: any) => {
@@ -1490,12 +1505,13 @@ export default function AdminPage() {
                 <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5', letterSpacing: '-0.02em' }}>
                   Students <span style={{ fontSize: 16, color: '#6B7280', fontWeight: 400 }}>({students.length})</span>
                 </h1>
+                <p style={{ fontSize: 13, color: '#6B7280', marginTop: 5 }}>{students.filter(student => student.approval_status === 'pending').length} account{students.filter(student => student.approval_status === 'pending').length === 1 ? '' : 's'} awaiting approval</p>
               </div>
               <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid #2A2F35' }}>
-                      {['Name', 'Email', 'Track', 'Joined'].map(h => (
+                      {['Name', 'Email', 'Track', 'Status', 'Joined', 'Action'].map(h => (
                         <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{h}</th>
                       ))}
                     </tr>
@@ -1528,8 +1544,23 @@ export default function AdminPage() {
                               background: `${track?.color}15`, color: track?.color,
                             }}>{s.track}</span>
                           </td>
+                          <td style={{ padding: '13px 16px' }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '4px 10px', borderRadius: 20, fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', background: s.approval_status === 'approved' ? 'rgba(76,175,125,0.12)' : s.approval_status === 'rejected' ? 'rgba(248,113,113,0.12)' : 'rgba(213,156,16,0.12)', color: s.approval_status === 'approved' ? '#4CAF7D' : s.approval_status === 'rejected' ? '#F87171' : '#D59C10' }}>
+                              {s.approval_status || 'approved'}
+                            </span>
+                          </td>
                           <td style={{ padding: '13px 16px', fontSize: 12, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace' }}>
                             {new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </td>
+                          <td style={{ padding: '13px 16px' }} onClick={event => event.stopPropagation()}>
+                            {s.approval_status === 'pending' ? (
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button disabled={updatingApproval === s.id} onClick={() => setAccountApproval(s, 'approved')} style={{ background: 'rgba(76,175,125,0.12)', border: '1px solid rgba(76,175,125,0.35)', color: '#4CAF7D', borderRadius: 20, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Approve</button>
+                                <button disabled={updatingApproval === s.id} onClick={() => setAccountApproval(s, 'rejected')} style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)', color: '#F87171', borderRadius: 20, padding: '5px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Reject</button>
+                              </div>
+                            ) : s.approval_status === 'rejected' ? (
+                              <button disabled={updatingApproval === s.id} onClick={() => setAccountApproval(s, 'approved')} style={{ background: 'transparent', border: '1px solid #3A3F46', color: '#9CA3AF', borderRadius: 20, padding: '5px 12px', fontSize: 11, cursor: 'pointer' }}>Approve</button>
+                            ) : <span style={{ fontSize: 11, color: '#3A3F46' }}>—</span>}
                           </td>
                         </tr>
                       );

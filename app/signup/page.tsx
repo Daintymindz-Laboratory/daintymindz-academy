@@ -1,5 +1,6 @@
 'use client';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 
 export default function SignUp() {
@@ -51,8 +52,8 @@ const handleSubmit = async (e: React.FormEvent) => {
         }
       });
       if (error) { setError(error.message); setLoading(false); return; }
-      window.location.href = '/dashboard';
-    } catch (err) {
+      window.location.href = '/pending-approval';
+    } catch {
       setError('Something went wrong. Please try again.');
       setLoading(false);
     }
@@ -72,13 +73,13 @@ const handleSubmit = async (e: React.FormEvent) => {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         flexShrink: 0,
       }}>
-        <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
           <Image src="/logo.png" alt="Daintymindz" width={110} height={40} style={{ objectFit: 'contain' }} />
           <span style={{
             fontSize: 15, fontWeight: 300, color: '#6B7280',
             borderLeft: '1px solid #3A3F46', paddingLeft: 10,
           }} className="dm-nav-academy">Academy</span>
-        </a>
+        </Link>
         
           <a href="/signin" style={{ color: '#6B7280', fontSize: 14, textDecoration: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}>Sign in</a>
       </nav>
@@ -131,7 +132,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               fontSize: 15, color: '#6B7280', lineHeight: 1.8,
               maxWidth: 340, marginBottom: 48,
             }}>
-              Create your free account and get access to all courses, projects, and certificates across four tracks.
+              Request an internal Academy account. An administrator will review your access before you can begin learning.
             </p>
 
             {/* Track preview */}
@@ -170,7 +171,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               Create your account
             </h2>
             <p style={{ fontSize: 14, color: '#6B7280', marginBottom: 32 }}>
-              Free access to all courses and tracks.
+              New accounts require administrator approval.
             </p>
 
             <form onSubmit={handleSubmit}>
@@ -325,7 +326,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               {/* Submit */}
 
               <button type="submit" disabled={loading} style={{ width: '100%', height: 50, background: loading ? '#A37808' : '#D59C10', border: 'none', borderRadius: 50, fontSize: 15, fontWeight: 700, color: '#1A1D21', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'background 0.2s' }}>
-                {loading ? 'Creating account...' : 'Create account'}
+                {loading ? 'Submitting request...' : 'Request access'}
               </button>
 
             </form>
