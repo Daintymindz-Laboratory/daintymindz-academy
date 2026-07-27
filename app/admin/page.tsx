@@ -96,6 +96,7 @@ export default function AdminPage() {
   const [adminProfileSaving, setAdminProfileSaving] = useState(false);
   const [adminProfiles, setAdminProfiles] = useState<{ id: string; full_name: string; position: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adminLoadError, setAdminLoadError] = useState('');
   const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'submissions' | 'messages'>('courses');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [tracks, setTracks] = useState<Track[]>(Object.entries(FALLBACK_TRACKS).map(([code, t]) => ({ code, ...t })));
@@ -160,23 +161,53 @@ export default function AdminPage() {
 
   useEffect(() => {
     const init = async () => {
-      const { createClient } = await import('@/lib/supabase');
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { window.location.href = '/signin'; return; }
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-      if (!profile?.is_admin) { window.location.href = '/dashboard'; return; }
-      setAdminName(profile.full_name);
-      setAdminId(user.id);
-      setAdminPosition(profile.position || '');
-      await loadTracks(supabase);
-      await loadCourses(supabase);
-      await loadStudents(supabase);
-      await loadAnalytics(supabase);
-      await loadSubmissions(supabase);
-      const { data: admins } = await supabase.from('profiles').select('id, full_name, position').eq('is_admin', true).order('full_name');
-      if (admins) setAdminProfiles(admins);
-      setLoading(false);
+      try {
+        const { createClient } = await import('@/lib/supabase');
+        const supabase = createClient();
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError) throw authError;
+        if (!user) { window.location.href = '/signin'; return; }
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+        if (profileError) throw profileError;
+        if (!profile?.is_admin) { window.location.href = '/dashboard'; return; }
+
+        setAdminName(profile.full_name);
+        setAdminId(user.id);
+        setAdminPosition(profile.position || '');
+
+        // Authorization is complete, so render the admin shell immediately.
+        // Optional panel queries must not be able to leave the whole page stuck.
+        setLoading(false);
+
+        const results = await Promise.allSettled([
+          loadTracks(supabase),
+          loadCourses(supabase),
+          loadStudents(supabase),
+          loadAnalytics(supabase),
+          loadSubmissions(supabase),
+          supabase.from('profiles').select('id, full_name, position').eq('is_admin', true).order('full_name'),
+        ]);
+
+        results.forEach((result, index) => {
+          if (result.status === 'rejected') {
+            console.error(`Admin panel request ${index + 1} failed:`, result.reason);
+          }
+        });
+
+        const adminsResult = results[5];
+        if (adminsResult.status === 'fulfilled' && adminsResult.value.data) {
+          setAdminProfiles(adminsResult.value.data);
+        }
+      } catch (error) {
+        console.error('Admin initialization failed:', error);
+        setAdminLoadError(error instanceof Error ? error.message : 'Could not load the admin account.');
+        setLoading(false);
+      }
     };
     init();
   }, []);
@@ -666,6 +697,20 @@ export default function AdminPage() {
   if (loading) return (
     <div style={{ background: '#1A1D21', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ fontFamily: 'JetBrains Mono, monospace', color: '#D59C10', fontSize: 13 }}>Loading admin...</div>
+    </div>
+  );
+
+  if (adminLoadError) return (
+    <div style={{ background: '#1A1D21', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ width: '100%', maxWidth: 460, background: '#22262B', border: '1px solid #3A3F46', borderRadius: 16, padding: 28, textAlign: 'center' }}>
+        <div style={{ color: '#F87171', fontSize: 16, fontWeight: 700, marginBottom: 8 }}>Could not load the admin panel</div>
+        <div style={{ color: '#9CA3AF', fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>{adminLoadError}</div>
+        <button onClick={() => window.location.reload()} style={{
+          background: '#D59C10', border: 'none', borderRadius: 50,
+          padding: '10px 24px', fontSize: 14, fontWeight: 700,
+          color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+        }}>Try again</button>
+      </div>
     </div>
   );
 
