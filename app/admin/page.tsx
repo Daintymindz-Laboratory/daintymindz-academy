@@ -570,6 +570,8 @@ export default function AdminPage() {
 
   const openCourse = async (course: Course) => {
     setSelectedCourse(course);
+    setShowLessonForm(false);
+    setEditingLesson(null);
     setActiveTab('lessons');
     await loadLessons(course.id!);
   };
@@ -915,8 +917,56 @@ export default function AdminPage() {
           {activeTab === 'lessons' && (
             <div>
               {!selectedCourse ? (
-                <div style={{ textAlign: 'center', padding: '5rem 0', color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
-                  {'// select a course from Course Manager to build lessons'}
+                <div>
+                  <div style={{ marginBottom: '2rem' }}>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// lesson builder'}</div>
+                    <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5', letterSpacing: '-0.02em' }}>Select a course</h1>
+                    <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>Choose the course whose lessons you want to create or manage.</p>
+                  </div>
+
+                  {courses.length > 0 ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
+                      {courses.map(course => {
+                        const track = tracksMap[course.track];
+                        return (
+                          <button
+                            key={course.id}
+                            onClick={() => openCourse(course)}
+                            style={{
+                              background: '#22262B', border: '1px solid #2A2F35',
+                              borderRadius: 16, padding: '18px 20px', textAlign: 'left',
+                              cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', color: '#F5F5F5',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                              <span style={{
+                                minWidth: 38, height: 38, padding: '0 8px', borderRadius: 10,
+                                background: `${track?.color || '#D59C10'}15`,
+                                border: `1px solid ${track?.color || '#D59C10'}30`,
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
+                                color: track?.color || '#D59C10',
+                              }}>{course.track}</span>
+                              <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.35 }}>{course.title}</span>
+                            </div>
+                            <div style={{ fontSize: 12, color: '#6B7280' }}>
+                              {course.lessons_count || 0} lessons · {course.level}{course.duration ? ` · ${course.duration}` : ''}
+                            </div>
+                            <div style={{ fontSize: 12, color: '#D59C10', marginTop: 14, fontWeight: 600 }}>Open lesson builder →</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '5rem 1rem', background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16 }}>
+                      <div style={{ color: '#6B7280', fontSize: 14, marginBottom: 16 }}>There are no courses available yet.</div>
+                      <button onClick={() => setActiveTab('courses')} style={{
+                        background: '#D59C10', border: 'none', borderRadius: 50,
+                        padding: '10px 24px', fontSize: 14, fontWeight: 700,
+                        color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                      }}>Create a course</button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div>
@@ -934,6 +984,22 @@ export default function AdminPage() {
                       <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
                         {lessons.length} lesson{lessons.length !== 1 ? 's' : ''} · {selectedCourse.track} · {selectedCourse.level}
                       </p>
+                      <div style={{ marginTop: 12, minWidth: 280 }}>
+                        <label style={{ ...labelStyle, marginBottom: 5 }}>Course</label>
+                        <select
+                          aria-label="Select course for lesson builder"
+                          style={{ ...inputStyle, cursor: 'pointer', height: 38 }}
+                          value={selectedCourse.id}
+                          onChange={event => {
+                            const course = courses.find(item => item.id === Number(event.target.value));
+                            if (course) openCourse(course);
+                          }}
+                        >
+                          {courses.map(course => (
+                            <option key={course.id} value={course.id}>{course.title}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                     <button onClick={() => {
                       setEditingLesson({
