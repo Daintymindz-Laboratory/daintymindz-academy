@@ -13,10 +13,11 @@ export default function Home() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setLoggedIn(true);
-      const { data } = await supabase.from('courses').select('track');
+      const { data } = await supabase.from('courses').select('*');
       if (!data) return;
-      const counts: Record<string, number> = { AI: 0, DA: 0, SE: 0, DO: 0, total: data.length };
-      data.forEach((c: any) => { if (counts[c.track] !== undefined) counts[c.track]++; });
+      const activeCourses = data.filter((course: any) => !course.archived_at);
+      const counts: Record<string, number> = { AI: 0, DA: 0, SE: 0, DO: 0, total: activeCourses.length };
+      activeCourses.forEach((c: any) => { if (counts[c.track] !== undefined) counts[c.track]++; });
       setCourseCounts(counts);
     };
     loadCounts();

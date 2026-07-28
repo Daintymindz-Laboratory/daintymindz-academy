@@ -76,7 +76,7 @@ export default function Catalog() {
       const { data: coursesData, error: coursesError } = await supabase
         .from('courses').select('*').order('track').order('id');
       if (coursesError) console.error('Courses fetch error:', coursesError);
-      if (coursesData) setCourses(coursesData);
+      if (coursesData) setCourses(coursesData.filter((course: any) => !course.archived_at));
 
       const { data: enrollments, error: enrollError } = await supabase
         .from('enrollments').select('course_id').eq('user_id', user.id);

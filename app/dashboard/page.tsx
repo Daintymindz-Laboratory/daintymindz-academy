@@ -239,7 +239,7 @@ export default function Dashboard() {
       }
 
       if (courses) {
-        setAllCourses(courses.map((c: any) => ({
+        setAllCourses(courses.filter((c: any) => !c.archived_at).map((c: any) => ({
           ...c,
           lessons: c.lessons_count,
           enrolled: enrolledIds.includes(c.id),

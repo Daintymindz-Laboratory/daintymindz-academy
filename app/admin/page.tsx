@@ -19,6 +19,8 @@ type Course = {
   description: string;
   created_by?: string | null;
   instructor_ids?: string[];
+  archived_at?: string | null;
+  archived_by?: string | null;
 };
 
 type Profile = {
@@ -103,6 +105,7 @@ export default function AdminPage() {
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
   const [savingTrack, setSavingTrack] = useState(false);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [archivedCourses, setArchivedCourses] = useState<Course[]>([]);
   const [students, setStudents] = useState<Profile[]>([]);
   const [updatingApproval, setUpdatingApproval] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
@@ -327,7 +330,10 @@ export default function AdminPage() {
 
   const loadCourses = async (supabase: any) => {
     const { data } = await supabase.from('courses').select('*').order('id');
-    if (data) setCourses(data);
+    if (data) {
+      setCourses(data.filter((course: Course) => !course.archived_at));
+      setArchivedCourses(data.filter((course: Course) => !!course.archived_at));
+    }
   };
 
   const loadStudents = async (supabase: any) => {
@@ -579,13 +585,29 @@ export default function AdminPage() {
     setSaving(false);
   };
 
-  const deleteCourse = async (id: number) => {
-    if (!confirm('Delete this course? This cannot be undone.')) return;
+  const archiveCourse = async (id: number) => {
+    if (!confirm('Archive this course? Students will no longer see or open it, and you can restore it later.')) return;
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
-    await supabase.from('courses').delete().eq('id', id);
+    const { error } = await supabase.from('courses').update({
+      archived_at: new Date().toISOString(),
+      archived_by: adminId,
+    }).eq('id', id);
+    if (error) { showToast(`Could not archive course: ${error.message}`); return; }
     await loadCourses(supabase);
-    showToast('Course deleted.');
+    showToast('Course moved to archive.');
+  };
+
+  const restoreCourse = async (id: number) => {
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { error } = await supabase.from('courses').update({
+      archived_at: null,
+      archived_by: null,
+    }).eq('id', id);
+    if (error) { showToast(`Could not restore course: ${error.message}`); return; }
+    await loadCourses(supabase);
+    showToast('Course restored.');
   };
 
   const loadLessons = async (courseId: number) => {
@@ -939,12 +961,12 @@ export default function AdminPage() {
                           fontSize: 12, color: '#F5F5F5', cursor: 'pointer',
                           fontFamily: 'DM Sans, sans-serif',
                         }}>Edit</button>
-                        <button onClick={() => deleteCourse(course.id!)} style={{
+                        <button onClick={() => archiveCourse(course.id!)} style={{
                           background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.2)',
                           borderRadius: 20, padding: '6px 16px',
                           fontSize: 12, color: '#F87171', cursor: 'pointer',
                           fontFamily: 'DM Sans, sans-serif',
-                        }}>Delete</button>
+                        }}>Archive</button>
                       </div>
                     </div>
                   );
@@ -955,6 +977,35 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+
+              {archivedCourses.length > 0 && (
+                <div style={{ marginTop: '2.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#6B7280', letterSpacing: '0.15em', textTransform: 'uppercase' }}>Archived courses</div>
+                    <span style={{ background: '#2A2F35', color: '#9CA3AF', borderRadius: 20, padding: '1px 8px', fontSize: 10 }}>{archivedCourses.length}</span>
+                  </div>
+                  <div style={{ background: '#1A1D21', border: '1px dashed #3A3F46', borderRadius: 16, overflow: 'hidden' }}>
+                    {archivedCourses.map((course, index) => (
+                      <div key={course.id} style={{
+                        padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14,
+                        borderBottom: index < archivedCourses.length - 1 ? '1px solid #2A2F35' : 'none',
+                      }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ color: '#9CA3AF', fontSize: 14, fontWeight: 600 }}>{course.title}</div>
+                          <div style={{ color: '#4B5563', fontSize: 11, marginTop: 3, fontFamily: 'JetBrains Mono, monospace' }}>
+                            Archived {course.archived_at ? new Date(course.archived_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                          </div>
+                        </div>
+                        <button onClick={() => restoreCourse(course.id!)} style={{
+                          background: 'rgba(76,175,125,0.08)', border: '1px solid rgba(76,175,125,0.25)',
+                          borderRadius: 20, padding: '6px 16px', color: '#4CAF7D',
+                          fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                        }}>Restore</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

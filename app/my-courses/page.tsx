@@ -98,7 +98,7 @@ export default function MyCoursesPage() {
       }
 
       if (enrollments) {
-        setCourses(enrollments.map((e: any) => ({
+        setCourses(enrollments.filter((e: any) => e.courses && !e.courses.archived_at).map((e: any) => ({
           ...e.courses,
           progress: progressMap[e.course_id]?.percentage || 0,
           resumeLessonId: resumeMap[e.course_id] || null,

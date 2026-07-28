@@ -105,7 +105,7 @@ export default function LessonPage() {
 
       const { data: courseData, error: courseError } = await supabase
         .from('courses').select('*').eq('id', courseId).single();
-      if (courseError) { window.location.href = '/dashboard'; return; }
+      if (courseError || courseData?.archived_at) { window.location.href = '/dashboard'; return; }
       if (courseData) setCourse(courseData);
 
       const { data: lessonsData } = await supabase
