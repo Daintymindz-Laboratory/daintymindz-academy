@@ -28,6 +28,8 @@ interface Submission {
   status: SubmissionStatus;
   feedback: string | null;
   submitted_at: string;
+  final_score?: number | null;
+  grading_decision?: string | null;
 }
 
 interface Props {
@@ -76,10 +78,10 @@ export default function MiniProjectLesson({
       const [{ data: tcData }, { data: resultData }, { data: subData }] = await Promise.all([
         supabase.from('mini_project_test_cases').select('*').eq('lesson_id', lessonId).order('order_index'),
         supabase.from('mini_project_results').select('submitted_code').eq('lesson_id', lessonId).eq('user_id', userId).maybeSingle(),
-        supabase.from('project_submissions').select('id, status, feedback, submitted_at').eq('lesson_id', lessonId).eq('user_id', userId).order('submitted_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('lesson_submissions').select('*').eq('lesson_id', lessonId).eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       setTestCases(tcData || []);
-      if (subData) setSubmission(subData);
+      if (subData) setSubmission({ ...subData, status: subData.status === 'rejected' ? 'rework' : subData.status, submitted_at: subData.created_at });
       if (resultData?.submitted_code) {
         setCode(resultData.submitted_code);
         try { localStorage.setItem(storageKey, resultData.submitted_code); } catch { /* ignore */ }
@@ -133,13 +135,12 @@ export default function MiniProjectLesson({
     setSubmitting(true);
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
-    const { data, error } = await supabase.from('project_submissions').insert({
-      user_id: userId, lesson_id: lessonId, course_id: courseId,
-      lesson_type: 'mini_project', submitted_code: code,
-      notes: submitNote.trim() || null, status: 'pending',
-    }).select('id, status, feedback, submitted_at').single();
+    const { data, error } = await supabase.from('lesson_submissions').insert({
+      user_id: userId, lesson_id: lessonId,
+      submission_url: code, note: submitNote.trim() || null, status: 'pending',
+    }).select('*').single();
     if (!error && data) {
-      setSubmission(data);
+      setSubmission({ ...data, status: data.status === 'rejected' ? 'rework' : data.status, submitted_at: data.created_at });
       setShowSubmitForm(false);
       setSubmitNote('');
       notify({ adminBroadcast: true, excludeUserId: userId, type: 'project_submitted', title: 'New project submission', message: 'A student submitted a mini project for review.', link: '/admin' });
@@ -191,6 +192,12 @@ export default function MiniProjectLesson({
               <div style={{ fontSize: 13, color: '#9CA3AF', marginTop: 4, paddingLeft: 24 }}>
                 <span style={{ color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Instructor feedback: </span>
                 {submission.feedback}
+              </div>
+            )}
+            {submission.final_score != null && (
+              <div style={{ fontSize: 13, color: '#F5F5F5', marginTop: 8, paddingLeft: 24 }}>
+                Score: <strong style={{ color: submission.final_score >= 80 ? '#4CAF7D' : '#D59C10' }}>{submission.final_score}/100</strong>
+                {submission.grading_decision ? ` · ${submission.grading_decision.replace('_', ' ')}` : ''}
               </div>
             )}
           </div>

@@ -47,6 +47,14 @@ type Lesson = {
   order_index: number;
   is_published: boolean;
   requires_review: boolean;
+  rubric_criteria?: RubricCriterion[];
+};
+
+type RubricCriterion = {
+  id: string;
+  title: string;
+  description: string;
+  max_points: number;
 };
 
 type Submission = {
@@ -64,6 +72,12 @@ type Submission = {
   course_title: string;
   course_instructor: string;
   lesson_title: string;
+  rubric_criteria: RubricCriterion[];
+  rubric_scores: Record<string, number>;
+  acceptance_tests_passed: number | null;
+  acceptance_tests_total: number | null;
+  final_score: number | null;
+  grading_decision: 'pass' | 'revise' | 'not_yet' | null;
 };
 
 const FALLBACK_TRACKS: Record<string, { label: string; color: string }> = Object.fromEntries(
@@ -76,6 +90,14 @@ const EMPTY_COURSE: Course = {
   title: '', track: 'AI', level: 'Beginner',
   lessons_count: 0, duration: '', description: '',
 };
+
+const FRESHLAB_RUBRIC: RubricCriterion[] = [
+  { id: 'acceptance_tests', title: 'Acceptance tests pass', description: 'Objective score calculated from the number of acceptance tests passed.', max_points: 50 },
+  { id: 'code_quality', title: 'Code quality and structure', description: 'Clear functions, meaningful names, sensible helpers, and readable orchestration.', max_points: 15 },
+  { id: 'trust_mindset', title: 'Operations and trust mindset', description: 'Honest missing values, surfaced validation errors, boundary coercion, and accurate reporting.', max_points: 15 },
+  { id: 'writeup', title: 'Write-up quality', description: 'Accurate, thoughtful explanation of cleaning, validation, trust, and improvements.', max_points: 15 },
+  { id: 'reproducibility', title: 'Reproducibility and hygiene', description: 'Runs from a clean checkout, preserves inputs, writes expected outputs, and avoids absolute paths.', max_points: 5 },
+];
 
 export default function AdminPage() {
   type Analytics = {
@@ -155,6 +177,10 @@ export default function AdminPage() {
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
   const [gradingFeedback, setGradingFeedback] = useState('');
   const [grading, setGrading] = useState(false);
+  const [rubricScores, setRubricScores] = useState<Record<string, number>>({});
+  const [acceptancePassed, setAcceptancePassed] = useState(0);
+  const [acceptanceTotal, setAcceptanceTotal] = useState(0);
+  const [gradingDecision, setGradingDecision] = useState<'pass' | 'revise' | 'not_yet'>('revise');
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [editingQuestion, setEditingQuestion] = useState<QuizQuestion | null>(null);
   const [savingQuestion, setSavingQuestion] = useState(false);
@@ -262,7 +288,7 @@ export default function AdminPage() {
 
     const lessonIds = [...new Set(data.map((s: any) => s.lesson_id as number))];
 
-    const { data: lessonsData } = await supabase.from('lessons').select('id, title, course_id, type').in('id', lessonIds);
+    const { data: lessonsData } = await supabase.from('lessons').select('*').in('id', lessonIds);
     const courseIds = [...new Set((lessonsData || []).map((lesson: any) => lesson.course_id as number))];
     const [{ data: profilesData }, { data: coursesData }] = await Promise.all([
       supabase.from('profiles').select('id, full_name'),
@@ -276,8 +302,8 @@ export default function AdminPage() {
         return [c.id, { title: c.title, instructor: ids.map(id => profileMap[id]).filter(Boolean).join(', ') || 'Unknown' }];
       })
     );
-    const lessonMap: Record<number, { title: string; courseId: number; type: string }> = Object.fromEntries(
-      (lessonsData || []).map((l: any) => [l.id, { title: l.title, courseId: l.course_id, type: l.type }])
+    const lessonMap: Record<number, { title: string; courseId: number; type: string; rubric: RubricCriterion[] }> = Object.fromEntries(
+      (lessonsData || []).map((l: any) => [l.id, { title: l.title, courseId: l.course_id, type: l.type, rubric: l.rubric_criteria || [] }])
     );
 
     const mapped = data.map((s: any) => ({
@@ -292,6 +318,12 @@ export default function AdminPage() {
       course_title: courseMap[lessonMap[s.lesson_id]?.courseId]?.title || '',
       course_instructor: courseMap[lessonMap[s.lesson_id]?.courseId]?.instructor || '',
       lesson_title: lessonMap[s.lesson_id]?.title || '',
+      rubric_criteria: lessonMap[s.lesson_id]?.rubric || [],
+      rubric_scores: s.rubric_scores || {},
+      acceptance_tests_passed: s.acceptance_tests_passed,
+      acceptance_tests_total: s.acceptance_tests_total,
+      final_score: s.final_score,
+      grading_decision: s.grading_decision,
     }));
     setSubmissions(mapped);
     setPendingCount(mapped.filter((s: any) => s.status === 'pending').length);
@@ -304,8 +336,28 @@ export default function AdminPage() {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
     const databaseStatus = status === 'rework' ? 'rejected' : status;
+    const scoredRubric = { ...rubricScores };
+    const acceptanceCriterion = selectedSubmission.rubric_criteria.find(criterion => criterion.id === 'acceptance_tests');
+    if (acceptanceCriterion && acceptanceTotal > 0) {
+      scoredRubric.acceptance_tests = Math.round(acceptanceCriterion.max_points * Math.min(acceptancePassed, acceptanceTotal) / acceptanceTotal);
+    }
+    const finalScore = selectedSubmission.rubric_criteria.reduce(
+      (total, criterion) => total + Math.min(Number(scoredRubric[criterion.id]) || 0, criterion.max_points),
+      0,
+    );
+    const decision = status === 'approved' ? 'pass' : gradingDecision;
     const { error } = await supabase.from('lesson_submissions')
-      .update({ status: databaseStatus, feedback: gradingFeedback.trim() || null, reviewed_at: new Date().toISOString(), reviewed_by: adminId })
+      .update({
+        status: databaseStatus,
+        feedback: gradingFeedback.trim() || null,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: adminId,
+        acceptance_tests_passed: acceptanceTotal > 0 ? acceptancePassed : null,
+        acceptance_tests_total: acceptanceTotal > 0 ? acceptanceTotal : null,
+        rubric_scores: scoredRubric,
+        final_score: selectedSubmission.rubric_criteria.length ? finalScore : null,
+        grading_decision: decision,
+      })
       .eq('id', selectedSubmission.id);
     if (error) { showToast(`Error: ${error.message}`); setGrading(false); return; }
     if (status === 'approved') {
@@ -326,6 +378,15 @@ export default function AdminPage() {
     setGradingFeedback('');
     setGrading(false);
     showToast(status === 'approved' ? 'Submission approved!' : 'Returned for rework.');
+  };
+
+  const openSubmissionReview = (submission: Submission) => {
+    setSelectedSubmission(submission);
+    setGradingFeedback(submission.feedback || '');
+    setRubricScores(submission.rubric_scores || {});
+    setAcceptancePassed(submission.acceptance_tests_passed || 0);
+    setAcceptanceTotal(submission.acceptance_tests_total || (submission.rubric_criteria.some(criterion => criterion.id === 'acceptance_tests') ? 11 : 0));
+    setGradingDecision(submission.grading_decision === 'not_yet' ? 'not_yet' : 'revise');
   };
 
   const loadCourses = async (supabase: any) => {
@@ -649,6 +710,7 @@ export default function AdminPage() {
         order_index: editingLesson.order_index,
         is_published: editingLesson.is_published,
         requires_review: editingLesson.requires_review,
+        rubric_criteria: editingLesson.rubric_criteria || [],
       }).eq('id', editingLesson.id);
       if (error) { showToast(`Error: ${error.message}`); setSavingLesson(false); return; }
       showToast('Lesson updated!');
@@ -669,6 +731,7 @@ export default function AdminPage() {
         order_index: lessons.length + 1,
         is_published: editingLesson.is_published,
         requires_review: editingLesson.requires_review,
+        rubric_criteria: editingLesson.rubric_criteria || [],
       }).select().single();
       if (error) { showToast(`Error: ${error.message}`); setSavingLesson(false); return; }
       setEditingLesson(inserted);
@@ -1108,6 +1171,7 @@ export default function AdminPage() {
                         order_index: lessons.length + 1,
                         is_published: false,
                         requires_review: false,
+                        rubric_criteria: [],
                       });
                       setShowLessonForm(true);
                     }} style={{
@@ -1441,6 +1505,56 @@ export default function AdminPage() {
                                 </div>
                               </div>
                             )}
+                          </div>
+                        )}
+
+                        {(editingLesson.type === 'mini_project' || editingLesson.type === 'project') && editingLesson.requires_review && (
+                          <div style={{ background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 14, padding: '1.25rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+                              <div>
+                                <label style={{ ...labelStyle, marginBottom: 3 }}>Grading Rubric</label>
+                                <div style={{ fontSize: 11, color: '#6B7280' }}>
+                                  Total: {(editingLesson.rubric_criteria || []).reduce((sum, criterion) => sum + (Number(criterion.max_points) || 0), 0)} points
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button type="button" onClick={() => setEditingLesson(lesson => lesson ? ({ ...lesson, rubric_criteria: FRESHLAB_RUBRIC.map(criterion => ({ ...criterion })) }) : lesson)} style={{ background: 'rgba(78,143,212,0.1)', border: '1px solid rgba(78,143,212,0.3)', borderRadius: 20, padding: '6px 14px', color: '#4E8FD4', fontSize: 12, cursor: 'pointer' }}>Load FreshLab rubric</button>
+                                <button type="button" onClick={() => setEditingLesson(lesson => lesson ? ({
+                                  ...lesson,
+                                  rubric_criteria: [...(lesson.rubric_criteria || []), {
+                                    id: `criterion_${Date.now()}`,
+                                    title: '',
+                                    description: '',
+                                    max_points: 10,
+                                  }],
+                                }) : lesson)} style={{ background: '#D59C10', border: 'none', borderRadius: 20, padding: '6px 14px', color: '#1A1D21', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>+ Criterion</button>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                              {(editingLesson.rubric_criteria || []).map((criterion, index) => (
+                                <div key={criterion.id} style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr 90px auto', gap: 8, alignItems: 'start' }}>
+                                  <input style={inputStyle} value={criterion.title} placeholder="Criterion title" onChange={event => setEditingLesson(lesson => {
+                                    if (!lesson) return lesson;
+                                    const rubric = [...(lesson.rubric_criteria || [])];
+                                    rubric[index] = { ...rubric[index], title: event.target.value };
+                                    return { ...lesson, rubric_criteria: rubric };
+                                  })} />
+                                  <input style={inputStyle} value={criterion.description} placeholder="What the reviewer should assess" onChange={event => setEditingLesson(lesson => {
+                                    if (!lesson) return lesson;
+                                    const rubric = [...(lesson.rubric_criteria || [])];
+                                    rubric[index] = { ...rubric[index], description: event.target.value };
+                                    return { ...lesson, rubric_criteria: rubric };
+                                  })} />
+                                  <input style={inputStyle} type="number" min={0} value={criterion.max_points} onChange={event => setEditingLesson(lesson => {
+                                    if (!lesson) return lesson;
+                                    const rubric = [...(lesson.rubric_criteria || [])];
+                                    rubric[index] = { ...rubric[index], max_points: Math.max(0, Number(event.target.value) || 0) };
+                                    return { ...lesson, rubric_criteria: rubric };
+                                  })} />
+                                  <button type="button" onClick={() => setEditingLesson(lesson => lesson ? ({ ...lesson, rubric_criteria: (lesson.rubric_criteria || []).filter((_, criterionIndex) => criterionIndex !== index) }) : lesson)} style={{ height: 42, background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', color: '#F87171', borderRadius: 10, padding: '0 12px', cursor: 'pointer' }}>Remove</button>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
 
@@ -1877,7 +1991,7 @@ export default function AdminPage() {
                                   {new Date(sub.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </div>
                               </div>
-                              <button onClick={() => { setSelectedSubmission(sub); setGradingFeedback(sub.feedback || ''); }} style={{ background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 20, padding: '7px 18px', fontSize: 13, color: '#F5F5F5', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                              <button onClick={() => openSubmissionReview(sub)} style={{ background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 20, padding: '7px 18px', fontSize: 13, color: '#F5F5F5', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                 {sub.status === 'pending' ? 'Review' : 'View'}
                               </button>
                             </div>
@@ -1897,7 +2011,7 @@ export default function AdminPage() {
       {/* Submission review modal */}
       {selectedSubmission && (
         <div onClick={e => { if (e.target === e.currentTarget) { setSelectedSubmission(null); setGradingFeedback(''); } }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#1A1D21', border: '1px solid #2A2F35', borderRadius: 20, width: '100%', maxWidth: 760, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#1A1D21', border: '1px solid #2A2F35', borderRadius: 20, width: '100%', maxWidth: 880, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ padding: '20px 24px', borderBottom: '1px solid #2A2F35', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#F5F5F5', marginBottom: 2 }}>{selectedSubmission.student_name}</div>
@@ -1918,6 +2032,59 @@ export default function AdminPage() {
                 <div style={{ fontSize: 10, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Submitted code</div>
                 <pre style={{ background: '#0D1117', border: '1px solid #2A2F35', borderRadius: 10, padding: '14px 16px', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: '#E5E7EB', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, maxHeight: 320, overflowY: 'auto' }}>{selectedSubmission.submitted_code}</pre>
               </div>
+
+              {selectedSubmission.rubric_criteria.length > 0 && (() => {
+                const acceptanceCriterion = selectedSubmission.rubric_criteria.find(criterion => criterion.id === 'acceptance_tests');
+                const acceptanceScore = acceptanceCriterion && acceptanceTotal > 0
+                  ? Math.round(acceptanceCriterion.max_points * Math.min(acceptancePassed, acceptanceTotal) / acceptanceTotal)
+                  : 0;
+                const totalScore = selectedSubmission.rubric_criteria.reduce((total, criterion) => {
+                  const score = criterion.id === 'acceptance_tests' ? acceptanceScore : Number(rubricScores[criterion.id]) || 0;
+                  return total + Math.min(score, criterion.max_points);
+                }, 0);
+                const maxScore = selectedSubmission.rubric_criteria.reduce((total, criterion) => total + criterion.max_points, 0);
+                return (
+                  <div style={{ marginBottom: 20, background: '#22262B', border: '1px solid #2A2F35', borderRadius: 12, padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                      <div style={{ fontSize: 10, color: '#D59C10', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Grading rubric</div>
+                      <div style={{ color: totalScore >= 80 ? '#4CAF7D' : '#D59C10', fontSize: 18, fontWeight: 800 }}>{totalScore} / {maxScore}</div>
+                    </div>
+                    {acceptanceCriterion && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 20px 90px', gap: 8, alignItems: 'center', marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #2A2F35' }}>
+                        <div>
+                          <div style={{ color: '#F5F5F5', fontSize: 13, fontWeight: 600 }}>{acceptanceCriterion.title}</div>
+                          <div style={{ color: '#6B7280', fontSize: 11, marginTop: 3 }}>{acceptanceCriterion.description}</div>
+                        </div>
+                        <input aria-label="Acceptance tests passed" style={{ ...inputStyle, textAlign: 'center' }} type="number" min={0} max={acceptanceTotal || undefined} value={acceptancePassed} onChange={event => setAcceptancePassed(Math.max(0, Number(event.target.value) || 0))} />
+                        <span style={{ color: '#6B7280', textAlign: 'center' }}>/</span>
+                        <input aria-label="Acceptance tests total" style={{ ...inputStyle, textAlign: 'center' }} type="number" min={0} value={acceptanceTotal} onChange={event => setAcceptanceTotal(Math.max(0, Number(event.target.value) || 0))} />
+                        <div style={{ gridColumn: '1 / -1', color: '#4E8FD4', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}>{acceptancePassed}/{acceptanceTotal || 0} tests = {acceptanceScore}/{acceptanceCriterion.max_points} points</div>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {selectedSubmission.rubric_criteria.filter(criterion => criterion.id !== 'acceptance_tests').map(criterion => (
+                        <div key={criterion.id} style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 12, alignItems: 'center' }}>
+                          <div>
+                            <div style={{ color: '#F5F5F5', fontSize: 13, fontWeight: 600 }}>{criterion.title}</div>
+                            <div style={{ color: '#6B7280', fontSize: 11, marginTop: 3 }}>{criterion.description}</div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <input aria-label={`${criterion.title} score`} style={{ ...inputStyle, textAlign: 'center', width: 70 }} type="number" min={0} max={criterion.max_points} value={rubricScores[criterion.id] ?? ''} onChange={event => setRubricScores(scores => ({ ...scores, [criterion.id]: Math.min(criterion.max_points, Math.max(0, Number(event.target.value) || 0)) }))} />
+                            <span style={{ color: '#6B7280', fontSize: 12 }}>/ {criterion.max_points}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 16 }}>
+                      <label style={labelStyle}>Decision when returning</label>
+                      <select style={{ ...inputStyle, cursor: 'pointer' }} value={gradingDecision} onChange={event => setGradingDecision(event.target.value as 'revise' | 'not_yet')}>
+                        <option value="revise">Revise and resubmit</option>
+                        <option value="not_yet">Not yet</option>
+                      </select>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 10, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Feedback for student</div>
