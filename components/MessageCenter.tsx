@@ -19,6 +19,36 @@ type Contact = {
   lastAt: string;
 };
 
+const calendarDay = (value: string) => {
+  const date = new Date(value);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+};
+
+const formatDateLabel = (value: string) => {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  if (calendarDay(value) === calendarDay(today.toISOString())) return 'Today';
+  if (calendarDay(value) === calendarDay(yesterday.toISOString())) return 'Yesterday';
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
+  });
+};
+
+const formatMessageTimestamp = (value: string) => new Date(value).toLocaleString('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 export default function MessageCenter({ userId, isAdmin, trackColor, instructorId }: { userId: string; isAdmin: boolean; trackColor?: string; instructorId?: string }) {
   const color = trackColor || '#D59C10';
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -142,7 +172,16 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
                   {c.unread > 0 && <span style={{ background: color, color: '#1A1D21', fontSize: 9, fontWeight: 700, borderRadius: 10, padding: '1px 5px', fontFamily: 'JetBrains Mono, monospace' }}>{c.unread}</span>}
                 </div>
                 {isInstructor && <div style={{ fontSize: 10, color: color, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Your Instructor</div>}
-                {c.lastMessage && <div style={{ fontSize: 11, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.lastMessage}</div>}
+                {c.lastMessage && (
+                  <>
+                    <div style={{ fontSize: 11, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.lastMessage}</div>
+                    {c.lastAt && (
+                      <div style={{ fontSize: 9, color: '#4B5563', marginTop: 4, fontFamily: 'JetBrains Mono, monospace' }}>
+                        {formatMessageTimestamp(c.lastAt)}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             );
           })}
@@ -172,22 +211,33 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
               {selectedContact?.name || 'Conversation'}
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {thread.map(m => {
+              {thread.map((m, index) => {
                 const mine = m.sender_id === userId;
+                const previousMessage = index > 0 ? thread[index - 1] : null;
+                const showDateSeparator = !previousMessage || calendarDay(previousMessage.created_at) !== calendarDay(m.created_at);
                 return (
-                  <div key={m.id} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start' }}>
-                    <div style={{ maxWidth: '75%' }}>
-                      {!mine && <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 3, fontFamily: 'JetBrains Mono, monospace' }}>{m.sender_name}</div>}
-                      <div style={{ padding: '9px 14px', borderRadius: mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background: mine ? color : '#1A1D21', color: mine ? '#1A1D21' : '#F5F5F5', fontSize: 13, lineHeight: 1.5, fontWeight: mine ? 500 : 400 }}>
-                        {m.content}
+                  <div key={m.id}>
+                    {showDateSeparator && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: index === 0 ? '2px 0 14px' : '12px 0 14px' }}>
+                        <div style={{ height: 1, background: '#2A2F35', flex: 1 }} />
+                        <span style={{ color: '#6B7280', fontSize: 10, fontFamily: 'JetBrains Mono, monospace' }}>{formatDateLabel(m.created_at)}</span>
+                        <div style={{ height: 1, background: '#2A2F35', flex: 1 }} />
                       </div>
-                      <div style={{ fontSize: 10, color: '#3A3F46', marginTop: 3, textAlign: mine ? 'right' : 'left', fontFamily: 'JetBrains Mono, monospace', display: 'flex', alignItems: 'center', justifyContent: mine ? 'flex-end' : 'flex-start', gap: 4 }}>
-                        {new Date(m.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        {mine && (
-                          <span style={{ color: m.read ? '#4E8FD4' : '#6B7280', fontSize: 12, letterSpacing: '-3px', lineHeight: 1 }}>
-                            {m.read ? '✓✓' : '✓'}
-                          </span>
-                        )}
+                    )}
+                    <div style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start' }}>
+                      <div style={{ maxWidth: '75%' }}>
+                        {!mine && <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 3, fontFamily: 'JetBrains Mono, monospace' }}>{m.sender_name}</div>}
+                        <div style={{ padding: '9px 14px', borderRadius: mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px', background: mine ? color : '#1A1D21', color: mine ? '#1A1D21' : '#F5F5F5', fontSize: 13, lineHeight: 1.5, fontWeight: mine ? 500 : 400 }}>
+                          {m.content}
+                        </div>
+                        <div title={formatMessageTimestamp(m.created_at)} style={{ fontSize: 10, color: '#3A3F46', marginTop: 3, textAlign: mine ? 'right' : 'left', fontFamily: 'JetBrains Mono, monospace', display: 'flex', alignItems: 'center', justifyContent: mine ? 'flex-end' : 'flex-start', gap: 4 }}>
+                          {formatMessageTimestamp(m.created_at)}
+                          {mine && (
+                            <span style={{ color: m.read ? '#4E8FD4' : '#6B7280', fontSize: 12, letterSpacing: '-3px', lineHeight: 1 }}>
+                              {m.read ? '✓✓' : '✓'}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
