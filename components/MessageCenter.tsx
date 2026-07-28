@@ -9,15 +9,21 @@ type Message = {
   read: boolean;
   created_at: string;
   sender_name?: string;
+  course_id: number | null;
 };
 
 type Contact = {
+  key: string;
   id: string;
   name: string;
   unread: number;
   lastMessage: string;
   lastAt: string;
+  courseId: number | null;
+  courseTitle: string;
 };
+
+type InstructorOption = { id: string; name: string; courseId: number; courseTitle: string };
 
 const calendarDay = (value: string) => {
   const date = new Date(value);
@@ -49,14 +55,14 @@ const formatMessageTimestamp = (value: string) => new Date(value).toLocaleString
   minute: '2-digit',
 });
 
-export default function MessageCenter({ userId, isAdmin, trackColor, instructorId }: { userId: string; isAdmin: boolean; trackColor?: string; instructorId?: string }) {
+export default function MessageCenter({ userId, isAdmin, trackColor, instructorId, courseId }: { userId: string; isAdmin: boolean; trackColor?: string; instructorId?: string; courseId?: number }) {
   const color = trackColor || '#D59C10';
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [thread, setThread] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
-  const [admins, setAdmins] = useState<{ id: string; name: string }[]>([]);
+  const [admins, setAdmins] = useState<InstructorOption[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,8 +72,9 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
   }, [userId]);
 
   useEffect(() => {
-    if (selectedId) loadThread(selectedId);
-  }, [selectedId]);
+    const selected = contacts.find(contact => contact.key === selectedKey) || admins.find(option => `${option.id}:${option.courseId}` === selectedKey);
+    if (selected) loadThread(selected.id, 'courseId' in selected ? selected.courseId : null);
+  }, [selectedKey]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -76,13 +83,29 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
   const loadInstructors = async () => {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
-    if (instructorId) {
-      const { data } = await supabase.from('profiles').select('id, full_name').eq('id', instructorId).single();
-      if (data) setAdmins([{ id: data.id, name: data.full_name || 'Instructor' }]);
-    } else {
-      const { data } = await supabase.from('profiles').select('id, full_name').eq('is_admin', true);
-      setAdmins((data || []).map((p: any) => ({ id: p.id, name: p.full_name || 'Instructor' })));
+    const { data: enrollments } = await supabase.from('enrollments').select('course_id').eq('user_id', userId);
+    let courseIds = (enrollments || []).map((enrollment: any) => Number(enrollment.course_id));
+    if (courseId && !courseIds.includes(courseId)) courseIds = [courseId, ...courseIds];
+    if (!courseIds.length) { setAdmins([]); return; }
+    const { data: courses } = await supabase.from('courses').select('id,title,created_by,instructor_ids').in('id', courseIds);
+    const instructorIds = [...new Set((courses || []).flatMap((course: any) => [
+      course.created_by,
+      ...(Array.isArray(course.instructor_ids) ? course.instructor_ids : []),
+    ]).filter(Boolean))] as string[];
+    const { data: profiles } = instructorIds.length
+      ? await supabase.from('profiles').select('id,full_name').in('id', instructorIds)
+      : { data: [] as any[] };
+    const names = Object.fromEntries((profiles || []).map((profile: any) => [profile.id, profile.full_name || 'Instructor']));
+    const options: InstructorOption[] = [];
+    for (const course of courses || []) {
+      const ids = [...new Set([course.created_by, ...(Array.isArray(course.instructor_ids) ? course.instructor_ids : [])].filter(Boolean))] as string[];
+      for (const id of ids) options.push({ id, name: names[id] || 'Instructor', courseId: Number(course.id), courseTitle: course.title });
     }
+    if (instructorId && courseId && !options.some(option => option.id === instructorId && option.courseId === courseId)) {
+      const { data } = await supabase.from('profiles').select('id,full_name').eq('id', instructorId).single();
+      if (data) options.unshift({ id: data.id, name: data.full_name || 'Instructor', courseId, courseTitle: 'Current course' });
+    }
+    setAdmins(options);
   };
 
   const loadContacts = async () => {
@@ -98,25 +121,30 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
     const otherIds = [...new Set(data.map((m: any) => m.sender_id === userId ? m.recipient_id : m.sender_id) as string[])];
     const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', otherIds);
     const nameMap: Record<string, string> = Object.fromEntries((profiles || []).map((p: any) => [p.id, p.full_name || 'User']));
+    const courseIds = [...new Set(data.map((m: any) => m.course_id).filter(Boolean))];
+    const { data: courses } = courseIds.length ? await supabase.from('courses').select('id,title').in('id', courseIds) : { data: [] as any[] };
+    const courseMap = Object.fromEntries((courses || []).map((course: any) => [course.id, course.title]));
 
     const contactMap: Record<string, Contact> = {};
     for (const m of data) {
       const otherId = m.sender_id === userId ? m.recipient_id : m.sender_id;
-      if (!contactMap[otherId]) {
-        contactMap[otherId] = { id: otherId, name: nameMap[otherId] || 'User', unread: 0, lastMessage: m.content, lastAt: m.created_at };
+      const key = `${otherId}:${m.course_id || 'general'}`;
+      if (!contactMap[key]) {
+        contactMap[key] = { key, id: otherId, name: nameMap[otherId] || 'User', unread: 0, lastMessage: m.content, lastAt: m.created_at, courseId: m.course_id || null, courseTitle: courseMap[m.course_id] || 'General Academy' };
       }
-      if (!m.read && m.recipient_id === userId) contactMap[otherId].unread++;
+      if (!m.read && m.recipient_id === userId) contactMap[key].unread++;
     }
     setContacts(Object.values(contactMap));
   };
 
-  const loadThread = async (otherId: string) => {
+  const loadThread = async (otherId: string, selectedCourseId: number | null) => {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
     const { data } = await supabase
       .from('messages')
       .select('*')
       .or(`and(sender_id.eq.${userId},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${userId})`)
+      .filter('course_id', selectedCourseId ? 'eq' : 'is', selectedCourseId ? selectedCourseId : null)
       .order('created_at', { ascending: true });
 
     const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', [userId, otherId]);
@@ -126,33 +154,33 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
     const unreadIds = (data || []).filter((m: any) => !m.read && m.recipient_id === userId).map((m: any) => m.id);
     if (unreadIds.length) {
       await supabase.from('messages').update({ read: true }).in('id', unreadIds);
-      setContacts(prev => prev.map(c => c.id === otherId ? { ...c, unread: 0 } : c));
+      setContacts(prev => prev.map(c => c.id === otherId && c.courseId === selectedCourseId ? { ...c, unread: 0 } : c));
     }
   };
 
   const sendMessage = async () => {
-    if (!draft.trim() || !selectedId) return;
+    const selected = contacts.find(contact => contact.key === selectedKey) || admins.find(option => `${option.id}:${option.courseId}` === selectedKey);
+    if (!draft.trim() || !selected) return;
     setSending(true);
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
-    await supabase.from('messages').insert({ sender_id: userId, recipient_id: selectedId, content: draft.trim() });
+    const selectedCourseId = 'courseId' in selected ? selected.courseId : null;
+    await supabase.from('messages').insert({ sender_id: userId, recipient_id: selected.id, course_id: selectedCourseId, content: draft.trim() });
     setDraft('');
-    await loadThread(selectedId);
+    await loadThread(selected.id, selectedCourseId);
     await loadContacts();
     setSending(false);
   };
 
-  const startNewChat = async (adminId: string) => {
-    setSelectedId(adminId);
-    if (!contacts.find(c => c.id === adminId)) {
-      const { createClient } = await import('@/lib/supabase');
-      const supabase = createClient();
-      const { data } = await supabase.from('profiles').select('id, full_name').eq('id', adminId).single();
-      if (data) setContacts(prev => [{ id: data.id, name: data.full_name || 'Instructor', unread: 0, lastMessage: '', lastAt: '' }, ...prev]);
+  const startNewChat = (option: InstructorOption) => {
+    const key = `${option.id}:${option.courseId}`;
+    setSelectedKey(key);
+    if (!contacts.find(contact => contact.key === key)) {
+      setContacts(previous => [{ key, id: option.id, name: option.name, unread: 0, lastMessage: '', lastAt: '', courseId: option.courseId, courseTitle: option.courseTitle }, ...previous]);
     }
   };
 
-  const selectedContact = contacts.find(c => c.id === selectedId) || admins.find(a => a.id === selectedId);
+  const selectedContact = contacts.find(contact => contact.key === selectedKey) || admins.find(option => `${option.id}:${option.courseId}` === selectedKey);
   const totalUnread = contacts.reduce((s, c) => s + c.unread, 0);
 
   return (
@@ -166,12 +194,13 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
           {contacts.map(c => {
             const isInstructor = !isAdmin && admins.find(a => a.id === c.id);
             return (
-              <div key={c.id} onClick={() => setSelectedId(c.id)} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid #2A2F35', background: selectedId === c.id ? 'rgba(213,156,16,0.06)' : 'transparent', borderLeft: selectedId === c.id ? `2px solid ${color}` : '2px solid transparent' }}>
+              <div key={c.key} onClick={() => setSelectedKey(c.key)} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid #2A2F35', background: selectedKey === c.key ? 'rgba(213,156,16,0.06)' : 'transparent', borderLeft: selectedKey === c.key ? `2px solid ${color}` : '2px solid transparent' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5' }}>{c.name}</span>
                   {c.unread > 0 && <span style={{ background: color, color: '#1A1D21', fontSize: 9, fontWeight: 700, borderRadius: 10, padding: '1px 5px', fontFamily: 'JetBrains Mono, monospace' }}>{c.unread}</span>}
                 </div>
                 {isInstructor && <div style={{ fontSize: 10, color: color, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Your Instructor</div>}
+                <div style={{ fontSize: 10, color, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.courseTitle}</div>
                 {c.lastMessage && (
                   <>
                     <div style={{ fontSize: 11, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.lastMessage}</div>
@@ -186,10 +215,11 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
             );
           })}
 
-          {!isAdmin && admins.filter(a => !contacts.find(c => c.id === a.id)).map(a => (
-            <div key={a.id} onClick={() => startNewChat(a.id)} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid #2A2F35' }}>
+          {!isAdmin && admins.filter(a => !contacts.find(c => c.key === `${a.id}:${a.courseId}`)).map(a => (
+            <div key={`${a.id}:${a.courseId}`} onClick={() => startNewChat(a)} style={{ padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid #2A2F35' }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5', marginBottom: 2 }}>{a.name}</div>
               <div style={{ fontSize: 10, color: color, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>Your Instructor</div>
+              <div style={{ fontSize: 10, color, marginBottom: 2 }}>{a.courseTitle}</div>
               <div style={{ fontSize: 11, color: '#6B7280' }}>Start a conversation</div>
             </div>
           ))}
@@ -201,14 +231,15 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#22262B' }}>
-        {!selectedId ? (
+        {!selectedKey ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3A3F46', fontSize: 13, fontFamily: 'JetBrains Mono, monospace' }}>
             Select a conversation
           </div>
         ) : (
           <>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #2A2F35', fontSize: 14, fontWeight: 700, color: '#F5F5F5' }}>
-              {selectedContact?.name || 'Conversation'}
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid #2A2F35', color: '#F5F5F5' }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{selectedContact?.name || 'Conversation'}</div>
+              <div style={{ fontSize: 11, color, marginTop: 2 }}>{selectedContact?.courseTitle || 'General Academy'}</div>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               {thread.map((m, index) => {

@@ -501,7 +501,7 @@ function DiscussionDrawer({ courseId, userId, trackColor, instructorId }: { cour
       {open && (
         <div style={{ height: 400, overflowY: 'auto', padding: tab === 'comments' ? '20px 24px' : '0' }}>
           {tab === 'comments' && <CourseComments courseId={courseId} userId={userId} trackColor={trackColor} />}
-          {tab === 'messages' && <MessageCenter userId={userId} isAdmin={false} trackColor={trackColor} instructorId={instructorId} />}
+          {tab === 'messages' && <MessageCenter userId={userId} isAdmin={false} trackColor={trackColor} instructorId={instructorId} courseId={courseId} />}
         </div>
       )}
     </div>
