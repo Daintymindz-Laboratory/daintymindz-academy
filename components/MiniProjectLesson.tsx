@@ -39,11 +39,12 @@ interface Props {
   instructions: string;
   language?: string;
   isCompleted: boolean;
+  requiresReview: boolean;
   onComplete: () => void;
 }
 
 export default function MiniProjectLesson({
-  lessonId, courseId, userId, trackColor, starterCode, instructions, language = 'python', isCompleted, onComplete,
+  lessonId, courseId, userId, trackColor, starterCode, instructions, language = 'python', isCompleted, requiresReview, onComplete,
 }: Props) {
   const storageKey = `dm_mp_code_${lessonId}`;
   const defaultSnippet = language === 'python' ? '# Write your solution here\n' : '// Write your solution here\n';
@@ -122,7 +123,7 @@ export default function MiniProjectLesson({
       { onConflict: 'user_id,lesson_id' }
     );
     setSaving(false);
-    if (allPassed) onComplete();
+    if (allPassed && !requiresReview) onComplete();
   };
 
   const allPassed = results.length > 0 && results.every(r => r.passed);
@@ -160,7 +161,7 @@ export default function MiniProjectLesson({
           letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 12,
         }}>Mini Project</div>
 
-        {allPassed && (
+        {allPassed && !requiresReview && (
           <div style={{
             padding: '12px 16px', borderRadius: 12, marginBottom: 16,
             background: 'rgba(76,175,125,0.08)', border: '1px solid rgba(76,175,125,0.3)',
@@ -174,7 +175,7 @@ export default function MiniProjectLesson({
           </div>
         )}
 
-        {submission && (
+        {requiresReview && submission && (
           <div style={{
             padding: '12px 16px', borderRadius: 12, marginBottom: 16,
             background: submission.status === 'approved' ? 'rgba(76,175,125,0.08)' : submission.status === 'rework' ? 'rgba(248,113,113,0.08)' : 'rgba(213,156,16,0.08)',
@@ -195,7 +196,7 @@ export default function MiniProjectLesson({
           </div>
         )}
 
-        {!submission && (
+        {requiresReview && !submission && (
           <div style={{ marginBottom: 16 }}>
             {!showSubmitForm ? (
               <button onClick={() => setShowSubmitForm(true)} style={{
@@ -226,7 +227,7 @@ export default function MiniProjectLesson({
           </div>
         )}
 
-        {submission?.status === 'rework' && (
+        {requiresReview && submission?.status === 'rework' && (
           <div style={{ marginBottom: 16 }}>
             <button onClick={() => { setSubmission(null); setShowSubmitForm(true); }} style={{
               background: 'transparent', border: '1px solid #F87171',
