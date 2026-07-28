@@ -7,6 +7,7 @@ export type Language = 'python' | 'javascript' | 'typescript';
 export interface RunnerTestCase {
   id: number;
   description: string;
+  test_code?: string;
   expected_output: string;
 }
 
@@ -209,7 +210,9 @@ export async function runTestCases(
 ): Promise<TestResult[]> {
   const results: TestResult[] = [];
   for (const tc of testCases) {
-    const fullCode = composeTestCode(studentCode, tc.description, language);
+    const fullCode = tc.test_code?.trim()
+      ? `${studentCode}\n\n${tc.test_code}`
+      : composeTestCode(studentCode, tc.description, language);
     const runId = nextRunId();
     const { output, error } = await runOneTest(worker, fullCode, runId, timeoutMs);
     if (error !== undefined) {
