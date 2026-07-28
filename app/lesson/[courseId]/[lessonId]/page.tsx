@@ -14,6 +14,7 @@ import CourseComments from '@/components/CourseComments';
 import MessageCenter from '@/components/MessageCenter';
 import CourseRating from '@/components/CourseRating';
 import DiscussionPromptLesson from '@/components/DiscussionPromptLesson';
+import LessonResources from '@/components/LessonResources';
 
 
 type Lesson = {
@@ -334,6 +335,7 @@ export default function LessonPage() {
 
         {lessonType === 'project' ? (
           <div className="dm-lesson-main">
+            <div style={{ padding: '0 2rem' }}><LessonResources lessonId={Number(currentLesson.id)} trackColor={trackColor} /></div>
             <ProjectLesson
               key={currentLesson.id}
               lessonId={Number(currentLesson.id)}
@@ -354,17 +356,20 @@ export default function LessonPage() {
         ) : lessonType === 'quiz' ? (
           <div className="dm-lesson-main">
             <div style={{ flex: 1, overflowY: 'auto' }}>
+              <div style={{ padding: '0 2rem' }}><LessonResources lessonId={Number(currentLesson.id)} trackColor={trackColor} /></div>
               <QuizLesson key={currentLesson.id} lessonId={Number(currentLesson.id)} userId={userId} trackColor={trackColor} introduction={currentLesson.content || ''} isCompleted={isCompleted} onComplete={markComplete} />
             </div>
             {simpleNavBar}
           </div>
         ) : lessonType === 'mini_project' ? (
           <div className="dm-lesson-main">
+            <div style={{ padding: '0 2rem' }}><LessonResources lessonId={Number(currentLesson.id)} trackColor={trackColor} /></div>
             <MiniProjectLesson key={currentLesson.id} lessonId={Number(currentLesson.id)} courseId={Number(courseId)} userId={userId} trackColor={trackColor} starterCode={currentLesson.starter_code || ''} instructions={currentLesson.instructions || ''} isCompleted={isCompleted} requiresReview={currentLesson.requires_review} onComplete={markComplete} />
             {simpleNavBar}
           </div>
         ) : lessonType === 'discussion' ? (
           <div className="dm-lesson-main">
+            <div style={{ padding: '0 2rem' }}><LessonResources lessonId={Number(currentLesson.id)} trackColor={trackColor} /></div>
             <DiscussionPromptLesson
               key={currentLesson.id}
               courseId={Number(courseId)}
@@ -384,6 +389,7 @@ export default function LessonPage() {
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: trackColor, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 10 }}>Lesson {currentIdx + 1} of {lessons.length}</div>
                 <h1 style={{ fontSize: 22, fontWeight: 700, color: '#F5F5F5', lineHeight: 1.2, marginBottom: 8, letterSpacing: '-0.02em' }}>{currentLesson.title}</h1>
               </div>
+              <LessonResources lessonId={Number(currentLesson.id)} trackColor={trackColor} />
               {embedUrl && <div style={{ marginBottom: '1.5rem', borderRadius: 12, overflow: 'hidden', border: '1px solid #2A2F35' }}><iframe src={embedUrl} width="100%" height="315" style={{ display: 'block', border: 'none' }} allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" /></div>}
               {currentLesson.content && <LessonContent content={currentLesson.content} trackColor={trackColor} workerRef={inlineWorkerRef} pyodideReady={inlinePyodideReady} />}
               {currentLesson.code && (

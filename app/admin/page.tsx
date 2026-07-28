@@ -57,6 +57,17 @@ type RubricCriterion = {
   max_points: number;
 };
 
+type LessonResource = {
+  id: number;
+  lesson_id: number;
+  title: string;
+  file_name: string;
+  storage_path: string;
+  mime_type: string | null;
+  file_size: number | null;
+  created_at: string;
+};
+
 type Submission = {
   id: number;
   user_id: string;
@@ -153,6 +164,8 @@ export default function AdminPage() {
   const [showLessonForm, setShowLessonForm] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [savingLesson, setSavingLesson] = useState(false);
+  const [lessonResources, setLessonResources] = useState<LessonResource[]>([]);
+  const [uploadingResource, setUploadingResource] = useState(false);
 
   type QuizQuestion = {
     id?: number;
@@ -493,7 +506,7 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    if (!editingLesson?.id) { setQuizQuestions([]); setTestCases([]); return; }
+    if (!editingLesson?.id) { setQuizQuestions([]); setTestCases([]); setLessonResources([]); return; }
     const load = async () => {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
@@ -504,9 +517,68 @@ export default function AdminPage() {
         const { data } = await supabase.from('mini_project_test_cases').select('*').eq('lesson_id', editingLesson.id).order('order_index');
         setTestCases(data || []);
       }
+      const { data: resources } = await supabase
+        .from('lesson_resources')
+        .select('*')
+        .eq('lesson_id', editingLesson.id)
+        .order('created_at');
+      setLessonResources(resources || []);
     };
     load();
   }, [editingLesson?.id, editingLesson?.type]);
+
+  const uploadLessonResource = async (file: File) => {
+    if (!editingLesson?.id || !adminId) {
+      showToast('Save the lesson before uploading resources.');
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      showToast('Files must be 50 MB or smaller.');
+      return;
+    }
+    setUploadingResource(true);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `${editingLesson.id}/${crypto.randomUUID()}-${safeName}`;
+    const { error: uploadError } = await supabase.storage.from('lesson-resources').upload(storagePath, file, {
+      contentType: file.type || 'application/octet-stream',
+    });
+    if (uploadError) {
+      setUploadingResource(false);
+      showToast(uploadError.message);
+      return;
+    }
+    const { data, error } = await supabase.from('lesson_resources').insert({
+      lesson_id: editingLesson.id,
+      title: file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' '),
+      file_name: file.name,
+      storage_path: storagePath,
+      mime_type: file.type || null,
+      file_size: file.size,
+      uploaded_by: adminId,
+    }).select().single();
+    if (error) {
+      await supabase.storage.from('lesson-resources').remove([storagePath]);
+      showToast(error.message);
+    } else {
+      setLessonResources(resources => [...resources, data]);
+      showToast('Student download uploaded.');
+    }
+    setUploadingResource(false);
+  };
+
+  const deleteLessonResource = async (resource: LessonResource) => {
+    if (!window.confirm(`Remove "${resource.file_name}" from this lesson?`)) return;
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { error } = await supabase.storage.from('lesson-resources').remove([resource.storage_path]);
+    if (error) { showToast(error.message); return; }
+    const { error: rowError } = await supabase.from('lesson_resources').delete().eq('id', resource.id);
+    if (rowError) { showToast(rowError.message); return; }
+    setLessonResources(resources => resources.filter(item => item.id !== resource.id));
+    showToast('Student download removed.');
+  };
 
   const saveQuestion = async () => {
     if (!editingQuestion || !editingLesson?.id) {
@@ -1557,6 +1629,44 @@ export default function AdminPage() {
                             </div>
                           </div>
                         )}
+
+                        <div style={{ background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 14, padding: '1.25rem' }}>
+                          <label style={{ ...labelStyle, marginBottom: 4 }}>Student Downloads</label>
+                          <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 14 }}>
+                            Attach starter ZIPs, briefs, templates, datasets, or other files students need. Keep answer keys and instructor references private.
+                          </div>
+                          {!editingLesson.id ? (
+                            <div style={{ color: '#9CA3AF', fontSize: 12 }}>Create the lesson first, then reopen it to upload files.</div>
+                          ) : (
+                            <>
+                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: uploadingResource ? '#3A3F46' : '#D59C10', color: '#1A1D21', borderRadius: 20, padding: '7px 16px', fontWeight: 700, fontSize: 12, cursor: uploadingResource ? 'not-allowed' : 'pointer' }}>
+                                {uploadingResource ? 'Uploading…' : '+ Upload file'}
+                                <input
+                                  type="file"
+                                  disabled={uploadingResource}
+                                  accept=".zip,.md,.pdf,.py,.txt,.csv,.json,.jsonl,.html"
+                                  style={{ display: 'none' }}
+                                  onChange={event => {
+                                    const file = event.target.files?.[0];
+                                    if (file) uploadLessonResource(file);
+                                    event.currentTarget.value = '';
+                                  }}
+                                />
+                              </label>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: lessonResources.length ? 12 : 0 }}>
+                                {lessonResources.map(resource => (
+                                  <div key={resource.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: '#22262B', borderRadius: 10, padding: '10px 12px' }}>
+                                    <div style={{ minWidth: 0 }}>
+                                      <div style={{ color: '#F5F5F5', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis' }}>{resource.title}</div>
+                                      <div style={{ color: '#6B7280', fontSize: 11 }}>{resource.file_name}{resource.file_size ? ` · ${(resource.file_size / 1024 / 1024).toFixed(2)} MB` : ''}</div>
+                                    </div>
+                                    <button type="button" onClick={() => deleteLessonResource(resource)} style={{ background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', color: '#F87171', borderRadius: 20, padding: '5px 12px', cursor: 'pointer' }}>Remove</button>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
 
                         {/* Publish toggle */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
