@@ -171,6 +171,7 @@ export default function MyCoursesPage() {
               { icon: '◎', label: 'My Courses', href: '/my-courses', active: true },
               { icon: '✦', label: 'Catalog', href: '/catalog' },
               { icon: '◈', label: 'Certificates', href: '/certificates' },
+              { icon: '✉', label: 'Messages', href: '/messages' },
               ...(isAdmin ? [{ icon: '⚙', label: 'Admin Panel', href: '/admin' }] : []),
             ].map(item => (
               <a key={item.label} href={item.href} style={{

@@ -368,6 +368,7 @@ export default function Dashboard() {
                 { icon: '◎', label: 'My Courses', active: false, href: '/my-courses' },
                 { icon: '✦', label: 'Catalog', active: false, href: '/catalog' },
                 { icon: '◈', label: 'Certificates', active: false, href: '/certificates' },
+                { icon: '✉', label: 'Messages', active: false, href: '/messages' },
                 ...(user.isAdmin ? [{ icon: '⚙', label: 'Admin Panel', active: false, href: '/admin' }] : []),
               ].map(item => (
                 <a key={item.label} href={item.href} style={{

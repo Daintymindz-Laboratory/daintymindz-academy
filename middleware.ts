@@ -26,7 +26,7 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   // Protected routes: redirect to signin if not logged in
-  const protectedRoutes = ['/dashboard', '/catalog', '/lesson', '/project', '/certificate', '/certificates', '/admin', '/my-courses'];
+  const protectedRoutes = ['/dashboard', '/catalog', '/lesson', '/project', '/certificate', '/certificates', '/admin', '/my-courses', '/messages'];
   const isProtected = protectedRoutes.some(route => request.nextUrl.pathname.startsWith(route));
 
   let approvalStatus: string | null = null;

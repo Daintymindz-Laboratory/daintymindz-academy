@@ -27,6 +27,7 @@ const BASE_NAV_ITEMS = [
   { icon: '◎', label: 'My Courses', href: '/my-courses' },
   { icon: '✦', label: 'Catalog', href: '/catalog', active: true },
   { icon: '◈', label: 'Certificates', active: false, href: '/certificates' },
+  { icon: '✉', label: 'Messages', active: false, href: '/messages' },
 ];
 
 export default function Catalog() {
