@@ -9,7 +9,7 @@ Create one **Project** lesson at the end of the Python for Data Operations cours
 - Requires review: **On**
 - Published: turn on only after the downloads and rubric are ready
 - Instructions: paste the learner-facing content from `Capstone_Project_Brief.md`
-- Rubric: select **Load FreshLab rubric**
+- Rubric: select **Load rubric**
 
 ## Upload for students
 

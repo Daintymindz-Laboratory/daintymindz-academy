@@ -1590,7 +1590,7 @@ export default function AdminPage() {
                                 </div>
                               </div>
                               <div style={{ display: 'flex', gap: 8 }}>
-                                <button type="button" onClick={() => setEditingLesson(lesson => lesson ? ({ ...lesson, rubric_criteria: FRESHLAB_RUBRIC.map(criterion => ({ ...criterion })) }) : lesson)} style={{ background: 'rgba(78,143,212,0.1)', border: '1px solid rgba(78,143,212,0.3)', borderRadius: 20, padding: '6px 14px', color: '#4E8FD4', fontSize: 12, cursor: 'pointer' }}>Load FreshLab rubric</button>
+                                <button type="button" onClick={() => setEditingLesson(lesson => lesson ? ({ ...lesson, rubric_criteria: FRESHLAB_RUBRIC.map(criterion => ({ ...criterion })) }) : lesson)} style={{ background: 'rgba(78,143,212,0.1)', border: '1px solid rgba(78,143,212,0.3)', borderRadius: 20, padding: '6px 14px', color: '#4E8FD4', fontSize: 12, cursor: 'pointer' }}>Load rubric</button>
                                 <button type="button" onClick={() => setEditingLesson(lesson => lesson ? ({
                                   ...lesson,
                                   rubric_criteria: [...(lesson.rubric_criteria || []), {
