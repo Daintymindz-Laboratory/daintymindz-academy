@@ -25,6 +25,15 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
+  const sessionMode = request.cookies.get('dm-session-mode')?.value;
+  const sessionActive = request.cookies.get('dm-session-active')?.value;
+  if (user && sessionMode === 'session' && !sessionActive) {
+    await supabase.auth.signOut();
+    const redirect = NextResponse.redirect(new URL('/signin', request.url));
+    response.cookies.getAll().forEach(cookie => redirect.cookies.set(cookie));
+    return redirect;
+  }
+
   // Protected routes: redirect to signin if not logged in
   const protectedRoutes = ['/dashboard', '/catalog', '/lesson', '/project', '/certificate', '/certificates', '/admin', '/my-courses', '/messages'];
   const isProtected = protectedRoutes.some(route => request.nextUrl.pathname.startsWith(route));

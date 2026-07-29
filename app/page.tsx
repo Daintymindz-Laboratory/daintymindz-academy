@@ -30,6 +30,15 @@ export default function Home() {
   const [tracks, setTracks] = useState<HomeTrack[]>(FALLBACK_TRACKS);
   const [loggedIn, setLoggedIn] = useState(false);
 
+  const signOut = async () => {
+    const { createClient } = await import('@/lib/supabase');
+    await createClient().auth.signOut();
+    document.cookie = 'dm-session-mode=; Path=/; Max-Age=0; SameSite=Lax';
+    document.cookie = 'dm-session-active=; Path=/; Max-Age=0; SameSite=Lax';
+    setLoggedIn(false);
+    window.location.reload();
+  };
+
   useEffect(() => {
     const loadCounts = async () => {
       const { createClient } = await import('@/lib/supabase');
@@ -168,11 +177,18 @@ export default function Home() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </a>
           {loggedIn ? (
-            <button style={{
-              background: '#D59C10', border: 'none',
-              color: '#1A1D21', padding: '9px 22px', fontSize: 14, fontWeight: 700,
-              cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', borderRadius: 50,
-            }} onClick={() => window.location.href='/dashboard'}>Go to Dashboard</button>
+            <>
+              <button style={{
+                background: 'transparent', border: '1px solid #3A3F46',
+                color: '#F5F5F5', padding: '9px 18px', fontSize: 14, fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', borderRadius: 50,
+              }} onClick={signOut}>Sign out</button>
+              <button style={{
+                background: '#D59C10', border: 'none',
+                color: '#1A1D21', padding: '9px 22px', fontSize: 14, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', borderRadius: 50,
+              }} onClick={() => window.location.href='/dashboard'}>Go to Dashboard</button>
+            </>
           ) : (
             <>
               <button style={{

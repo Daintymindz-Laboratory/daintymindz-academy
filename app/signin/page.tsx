@@ -8,8 +8,18 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
+
+  const saveSessionPreference = () => {
+    const year = 60 * 60 * 24 * 400;
+    document.cookie = `dm-session-mode=${keepSignedIn ? 'remember' : 'session'}; Path=/; Max-Age=${year}; SameSite=Lax`;
+    document.cookie = keepSignedIn
+      ? 'dm-session-active=; Path=/; Max-Age=0; SameSite=Lax'
+      : 'dm-session-active=1; Path=/; SameSite=Lax';
+  };
 
   const handleGoogle = async () => {
+    saveSessionPreference();
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: `${window.location.origin}/auth/callback` } });
@@ -27,6 +37,7 @@ export default function SignIn() {
         password,
       });
       if (error) { setError(error.message); setLoading(false); return; }
+      saveSessionPreference();
       const { data: profile } = await supabase
         .from('profiles')
         .select('approval_status')
@@ -225,8 +236,16 @@ export default function SignIn() {
                 />
               </div>
 
-              {/* Forgot password */}
-              <div style={{ textAlign: 'right', marginBottom: 28 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 28 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9CA3AF', fontSize: 13, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={keepSignedIn}
+                    onChange={event => setKeepSignedIn(event.target.checked)}
+                    style={{ width: 16, height: 16, accentColor: '#D59C10', cursor: 'pointer' }}
+                  />
+                  Keep me signed in
+                </label>
                 <a href="/forgot-password" style={{
                   fontSize: 13, color: '#6B7280', textDecoration: 'none',
                 }}
