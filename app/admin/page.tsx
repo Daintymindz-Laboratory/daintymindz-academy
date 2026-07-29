@@ -110,6 +110,13 @@ const FRESHLAB_RUBRIC: RubricCriterion[] = [
   { id: 'reproducibility', title: 'Reproducibility and hygiene', description: 'Runs from a clean checkout, preserves inputs, writes expected outputs, and avoids absolute paths.', max_points: 5 },
 ];
 
+const ASSESSMENT_RUBRIC: RubricCriterion[] = [
+  { id: 'understanding', title: 'Understanding and accuracy', description: 'Demonstrates accurate understanding of the concepts assessed.', max_points: 40 },
+  { id: 'application', title: 'Application and reasoning', description: 'Applies the concepts correctly and explains the reasoning behind the response.', max_points: 30 },
+  { id: 'evidence', title: 'Evidence and completeness', description: 'Provides sufficient evidence, examples, working, or supporting detail.', max_points: 20 },
+  { id: 'clarity', title: 'Clarity and presentation', description: 'Response is clear, organized, professional, and easy to follow.', max_points: 10 },
+];
+
 export default function AdminPage() {
   type Analytics = {
     totalStudents: number;
@@ -1580,7 +1587,7 @@ export default function AdminPage() {
                           </div>
                         )}
 
-                        {(editingLesson.type === 'mini_project' || editingLesson.type === 'project') && editingLesson.requires_review && (
+                        {(editingLesson.type === 'mini_project' || editingLesson.type === 'project' || editingLesson.type === 'assessment') && editingLesson.requires_review && (
                           <div style={{ background: '#1A1D21', border: '1px solid #3A3F46', borderRadius: 14, padding: '1.25rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
                               <div>
@@ -1590,7 +1597,10 @@ export default function AdminPage() {
                                 </div>
                               </div>
                               <div style={{ display: 'flex', gap: 8 }}>
-                                <button type="button" onClick={() => setEditingLesson(lesson => lesson ? ({ ...lesson, rubric_criteria: FRESHLAB_RUBRIC.map(criterion => ({ ...criterion })) }) : lesson)} style={{ background: 'rgba(78,143,212,0.1)', border: '1px solid rgba(78,143,212,0.3)', borderRadius: 20, padding: '6px 14px', color: '#4E8FD4', fontSize: 12, cursor: 'pointer' }}>Load rubric</button>
+                                <button type="button" onClick={() => setEditingLesson(lesson => lesson ? ({
+                                  ...lesson,
+                                  rubric_criteria: (lesson.type === 'assessment' ? ASSESSMENT_RUBRIC : FRESHLAB_RUBRIC).map(criterion => ({ ...criterion })),
+                                }) : lesson)} style={{ background: 'rgba(78,143,212,0.1)', border: '1px solid rgba(78,143,212,0.3)', borderRadius: 20, padding: '6px 14px', color: '#4E8FD4', fontSize: 12, cursor: 'pointer' }}>Load rubric</button>
                                 <button type="button" onClick={() => setEditingLesson(lesson => lesson ? ({
                                   ...lesson,
                                   rubric_criteria: [...(lesson.rubric_criteria || []), {
