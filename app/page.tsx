@@ -2,9 +2,32 @@
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 
+type HomeTrack = {
+  code: string;
+  name: string;
+  desc: string;
+  color: string;
+  glow: string;
+};
+
+const TRACK_DESCRIPTIONS: Record<string, string> = {
+  AI: 'Machine learning, deep learning, neural networks, model deployment',
+  DA: 'Python, statistics, pandas, SQL, dashboards and visualization',
+  SE: 'Python programming, system design, APIs and developer tooling',
+  DO: 'Data collection, annotation, engineering pipelines and MLOps',
+};
+
+const FALLBACK_TRACKS: HomeTrack[] = [
+  { code: 'AI', name: 'Artificial Intelligence', desc: TRACK_DESCRIPTIONS.AI, color: '#D59C10', glow: 'rgba(213,156,16,0.15)' },
+  { code: 'DA', name: 'Data Analytics', desc: TRACK_DESCRIPTIONS.DA, color: '#4E8FD4', glow: 'rgba(78,143,212,0.15)' },
+  { code: 'SE', name: 'Software Engineering', desc: TRACK_DESCRIPTIONS.SE, color: '#4CAF7D', glow: 'rgba(76,175,125,0.15)' },
+  { code: 'DO', name: 'Data Operations', desc: TRACK_DESCRIPTIONS.DO, color: '#9B6FD4', glow: 'rgba(155,111,212,0.15)' },
+];
+
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [courseCounts, setCourseCounts] = useState<Record<string, number>>({ AI: 0, DA: 0, SE: 0, DO: 0, total: 0 });
+  const [tracks, setTracks] = useState<HomeTrack[]>(FALLBACK_TRACKS);
   const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
@@ -13,11 +36,22 @@ export default function Home() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) setLoggedIn(true);
-      const { data } = await supabase.from('courses').select('*');
-      if (!data) return;
-      const activeCourses = data.filter((course: any) => !course.archived_at);
-      const counts: Record<string, number> = { AI: 0, DA: 0, SE: 0, DO: 0, total: activeCourses.length };
-      activeCourses.forEach((c: any) => { if (counts[c.track] !== undefined) counts[c.track]++; });
+      const [{ data: tracksData }, { data: coursesData }] = await Promise.all([
+        supabase.from('tracks').select('code,label,color').order('created_at'),
+        supabase.from('courses').select('track,archived_at'),
+      ]);
+      const databaseTracks = (tracksData || []).map((track: any) => ({
+        code: track.code,
+        name: track.label,
+        desc: TRACK_DESCRIPTIONS[track.code] || `Explore available ${track.label} courses and practical projects`,
+        color: track.color || '#6B7280',
+        glow: `${track.color || '#6B7280'}26`,
+      }));
+      if (databaseTracks.length) setTracks(databaseTracks);
+      const activeCourses = (coursesData || []).filter((course: any) => !course.archived_at);
+      const counts: Record<string, number> = { total: activeCourses.length };
+      (tracksData || FALLBACK_TRACKS).forEach((track: any) => { counts[track.code] = 0; });
+      activeCourses.forEach((course: any) => { counts[course.track] = (counts[course.track] || 0) + 1; });
       setCourseCounts(counts);
     };
     loadCounts();
@@ -88,37 +122,6 @@ export default function Home() {
       window.removeEventListener('resize', buildDots);
     };
   }, []);
-
-  const tracks = [
-    {
-      code: 'AI',
-      name: 'Artificial Intelligence',
-      desc: 'Machine learning, deep learning, neural networks, model deployment',
-      color: '#D59C10',
-      glow: 'rgba(213,156,16,0.15)',
-    },
-    {
-      code: 'DA',
-      name: 'Data Analytics',
-      desc: 'Python, statistics, pandas, SQL, dashboards and visualization',
-      color: '#4E8FD4',
-      glow: 'rgba(78,143,212,0.15)',
-    },
-    {
-      code: 'SE',
-      name: 'Software Engineering',
-      desc: 'Python programming, system design, APIs and developer tooling',
-      color: '#4CAF7D',
-      glow: 'rgba(76,175,125,0.15)',
-    },
-    {
-      code: 'DO',
-      name: 'Data Operations',
-      desc: 'Data collection, annotation, engineering pipelines and MLOps',
-      color: '#9B6FD4',
-      glow: 'rgba(155,111,212,0.15)',
-    },
-  ];
 
   return (
     <div style={{ background: '#1A1D21', minHeight: '100vh', position: 'relative', overflow: 'hidden', fontFamily: 'DM Sans, sans-serif' }}>
@@ -242,7 +245,7 @@ export default function Home() {
           <div style={{ display: 'flex', gap: 12 }}>
             {[
               { val: courseCounts.total > 0 ? String(courseCounts.total) : '—', label: 'Courses' },
-              { val: '4', label: 'Tracks' },
+              { val: String(tracks.length), label: 'Tracks' },
               { val: '100%', label: 'Project-based' },
             ].map(s => (
               <div key={s.label} style={{
