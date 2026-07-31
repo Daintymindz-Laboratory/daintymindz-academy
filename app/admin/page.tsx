@@ -751,33 +751,41 @@ export default function AdminPage() {
       ? editingCourse.instructor_ids
       : [editingCourse.created_by || adminId].filter(Boolean);
     const primaryInstructorId = instructorIds[0] || adminId;
-    if (editingCourse.id) {
-      await supabase.from('courses').update({
-        title: editingCourse.title,
-        track: editingCourse.track,
-        level: editingCourse.level,
-        lessons_count: editingCourse.lessons_count,
-        duration: editingCourse.duration,
-        description: editingCourse.description,
-        created_by: primaryInstructorId,
-        instructor_ids: instructorIds,
-        requires_enrollment_approval: editingCourse.requires_enrollment_approval,
-      }).eq('id', editingCourse.id);
-      showToast('Course updated!');
-    } else {
-      await supabase.from('courses').insert({
-        title: editingCourse.title,
-        track: editingCourse.track,
-        level: editingCourse.level,
-        lessons_count: editingCourse.lessons_count,
-        duration: editingCourse.duration,
-        description: editingCourse.description,
-        created_by: primaryInstructorId,
-        instructor_ids: instructorIds,
-        requires_enrollment_approval: editingCourse.requires_enrollment_approval,
-      });
-      showToast('Course created!');
+    const payload = {
+      title: editingCourse.title,
+      track: editingCourse.track,
+      level: editingCourse.level,
+      lessons_count: editingCourse.lessons_count,
+      duration: editingCourse.duration,
+      description: editingCourse.description,
+      created_by: primaryInstructorId,
+      instructor_ids: instructorIds,
+      requires_enrollment_approval: editingCourse.requires_enrollment_approval,
+    };
+    const save = (coursePayload: typeof payload | Omit<typeof payload, 'requires_enrollment_approval'>) => editingCourse.id
+      ? supabase.from('courses').update(coursePayload).eq('id', editingCourse.id)
+      : supabase.from('courses').insert(coursePayload);
+
+    let { error } = await save(payload);
+    let approvalSettingSkipped = false;
+    const approvalColumnMissing = error && (
+      ['PGRST204', 'PGRST205', '42703'].includes(error.code || '')
+      || error.message.toLowerCase().includes('requires_enrollment_approval')
+    );
+    if (approvalColumnMissing) {
+      const { requires_enrollment_approval: _approval, ...legacyPayload } = payload;
+      ({ error } = await save(legacyPayload));
+      approvalSettingSkipped = !error;
     }
+    if (error) {
+      console.error('Course save failed:', error);
+      showToast(`Could not save course: ${error.message}`);
+      setSaving(false);
+      return;
+    }
+    showToast(approvalSettingSkipped
+      ? `Course ${editingCourse.id ? 'updated' : 'created'}, but enrollment approval needs the latest Supabase migration.`
+      : `Course ${editingCourse.id ? 'updated' : 'created'}!`);
     await loadCourses(supabase);
     setShowForm(false);
     setEditingCourse(EMPTY_COURSE);
