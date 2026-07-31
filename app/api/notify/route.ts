@@ -35,18 +35,28 @@ async function sendEmail(to: string, subject: string, message: string, link?: st
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, adminBroadcast, excludeUserId, type, title, message, link } = await req.json();
+    const { userId, adminBroadcast, courseAdmins, courseId, emailOnly, excludeUserId, type, title, message, link } = await req.json();
     const supabase = createServiceClient();
 
-    if (adminBroadcast) {
-      const { data: admins } = await supabase.from('profiles').select('id').eq('is_admin', true);
-      for (const admin of (admins || []).filter(admin => admin.id !== excludeUserId)) {
-        await supabase.from('notifications').insert({ user_id: admin.id, type, title, message, link });
-        const { data: { user } } = await supabase.auth.admin.getUserById(admin.id);
+    if (adminBroadcast || (courseAdmins && courseId)) {
+      let recipientIds: string[] = [];
+      if (courseAdmins && courseId) {
+        const { data: course } = await supabase.from('courses').select('created_by,instructor_ids').eq('id', courseId).single();
+        recipientIds = [...new Set([
+          course?.created_by,
+          ...(Array.isArray(course?.instructor_ids) ? course.instructor_ids : []),
+        ].filter(Boolean))] as string[];
+      } else {
+        const { data: admins } = await supabase.from('profiles').select('id').eq('is_admin', true);
+        recipientIds = (admins || []).map(admin => admin.id);
+      }
+      for (const recipientId of recipientIds.filter(id => id !== excludeUserId)) {
+        if (!emailOnly) await supabase.from('notifications').insert({ user_id: recipientId, type, title, message, link });
+        const { data: { user } } = await supabase.auth.admin.getUserById(recipientId);
         if (user?.email) await sendEmail(user.email, title, message, link);
       }
     } else if (userId) {
-      await supabase.from('notifications').insert({ user_id: userId, type, title, message, link });
+      if (!emailOnly) await supabase.from('notifications').insert({ user_id: userId, type, title, message, link });
       const { data: { user } } = await supabase.auth.admin.getUserById(userId);
       if (user?.email) await sendEmail(user.email, title, message, link);
     }

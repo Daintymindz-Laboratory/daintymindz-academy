@@ -15,6 +15,9 @@ type Notification = {
 export default function NotificationBell({ userId }: { userId: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [popup, setPopup] = useState<Notification | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -28,17 +31,25 @@ export default function NotificationBell({ userId }: { userId: string }) {
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
-        .limit(30);
-      if (data) setNotifications(data);
+        .range(0, 29);
+      if (data) { setNotifications(data); setHasMore(data.length === 30); }
 
-      supabase
+      const channel = supabase
         .channel(`notifications:${userId}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-          (payload) => setNotifications(prev => [payload.new as Notification, ...prev])
+          (payload) => {
+            const notification = payload.new as Notification;
+            setNotifications(prev => [notification, ...prev]);
+            setPopup(notification);
+            window.setTimeout(() => setPopup(current => current?.id === notification.id ? null : current), 7000);
+          }
         )
         .subscribe();
+      return () => { void supabase.removeChannel(channel); };
     };
-    load();
+    let cleanup: (() => void) | undefined;
+    void load().then(result => { cleanup = result; });
+    return () => cleanup?.();
   }, [userId]);
 
   useEffect(() => {
@@ -69,6 +80,17 @@ export default function NotificationBell({ userId }: { userId: string }) {
     if (n.link) router.push(n.link);
   };
 
+  const loadOlder = async () => {
+    setLoadingMore(true);
+    const { createClient } = await import('@/lib/supabase');
+    const { data } = await createClient().from('notifications').select('*').eq('user_id', userId)
+      .order('created_at', { ascending: false }).range(notifications.length, notifications.length + 29);
+    const older = data || [];
+    setNotifications(previous => [...previous, ...older.filter(item => !previous.some(existing => existing.id === item.id))]);
+    setHasMore(older.length === 30);
+    setLoadingMore(false);
+  };
+
   const typeIcon: Record<string, string> = {
     project_submitted: '📬',
     submission_approved: '✅',
@@ -82,8 +104,15 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
+      {popup && (
+        <button onClick={() => { setPopup(null); void handleClick(popup); }} style={{ position: 'fixed', right: 24, top: 82, zIndex: 1000, width: 360, padding: '14px 16px', textAlign: 'left', background: '#22262B', border: '1px solid rgba(213,156,16,0.45)', borderRadius: 14, boxShadow: '0 14px 40px rgba(0,0,0,0.5)', cursor: popup.link ? 'pointer' : 'default' }}>
+          <div style={{ color: '#D59C10', fontSize: 10, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '0.12em', marginBottom: 5 }}>NEW NOTIFICATION</div>
+          <div style={{ color: '#F5F5F5', fontSize: 14, fontWeight: 700, marginBottom: 3 }}>{popup.title}</div>
+          <div style={{ color: '#9CA3AF', fontSize: 12, lineHeight: 1.5 }}>{popup.message}</div>
+        </button>
+      )}
       <button
-        onClick={() => { setOpen(o => !o); if (!open) markAllRead(); }}
+        onClick={() => setOpen(o => !o)}
         style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', position: 'relative', display: 'flex', alignItems: 'center' }}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -103,6 +132,11 @@ export default function NotificationBell({ userId }: { userId: string }) {
             <span style={{ fontSize: 13, fontWeight: 700, color: '#F5F5F5' }}>Notifications</span>
             {unread > 0 && (
               <button onClick={markAllRead} style={{ background: 'none', border: 'none', fontSize: 11, color: '#D59C10', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>Mark all read</button>
+            )}
+            {hasMore && (
+              <button onClick={loadOlder} disabled={loadingMore} style={{ width: '100%', padding: '11px', background: '#1A1D21', border: 'none', borderTop: '1px solid #2A2F35', color: '#D59C10', cursor: loadingMore ? 'wait' : 'pointer', fontSize: 12, fontWeight: 700 }}>
+                {loadingMore ? 'Loading…' : 'Load older notifications'}
+              </button>
             )}
           </div>
           <div style={{ maxHeight: 380, overflowY: 'auto' }}>

@@ -1,6 +1,9 @@
 export async function notify(payload: {
   userId?: string;
   adminBroadcast?: boolean;
+  courseAdmins?: boolean;
+  courseId?: number;
+  emailOnly?: boolean;
   excludeUserId?: string;
   type: string;
   title: string;

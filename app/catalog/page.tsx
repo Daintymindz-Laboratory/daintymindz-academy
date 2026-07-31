@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import ProfileButton from '@/components/ProfileButton';
 import { useUser } from '@/lib/user-context';
+import { notify } from '@/lib/notify';
 
 const TRACK_FALLBACK = { label: '', color: '#6B7280', glow: 'rgba(107,114,128,0.15)' };
 
@@ -20,6 +21,7 @@ type Course = {
   lessons_count: number;
   duration: string;
   description: string;
+  requires_enrollment_approval: boolean;
 };
 
 const BASE_NAV_ITEMS = [
@@ -37,6 +39,7 @@ export default function Catalog() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [enrolled, setEnrolled] = useState<number[]>([]);
   const [resumeMap, setResumeMap] = useState<Record<number, number>>({});
+  const [accessRequests, setAccessRequests] = useState<Record<number, 'pending' | 'approved' | 'rejected'>>({});
   const [loading, setLoading] = useState(true);
   const { user: ctxUser, tracks } = useUser();
   const [userName, setUserName] = useState('');
@@ -83,6 +86,8 @@ export default function Catalog() {
       if (enrollError) console.error('Enrollments fetch error:', enrollError);
       const enrolledIds = (enrollments || []).map((e: any) => e.course_id);
       if (enrollments) setEnrolled(enrolledIds);
+      const { data: requests } = await supabase.from('course_enrollment_requests').select('course_id,status').eq('user_id', user.id);
+      setAccessRequests(Object.fromEntries((requests || []).map((request: any) => [request.course_id, request.status])));
 
       // Build resume map for enrolled courses
       if (enrolledIds.length > 0) {
@@ -113,6 +118,15 @@ export default function Catalog() {
     const supabase = createClient();
     await supabase.from('enrollments').insert({ user_id: userId, course_id: courseId });
     setEnrolled(prev => [...prev, courseId]);
+  };
+
+  const requestCourseAccess = async (course: Course) => {
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { error } = await supabase.from('course_enrollment_requests').upsert({ user_id: userId, course_id: course.id, status: 'pending', updated_at: new Date().toISOString() }, { onConflict: 'course_id,user_id' });
+    if (error) { window.alert(error.message); return; }
+    setAccessRequests(previous => ({ ...previous, [course.id]: 'pending' }));
+    void notify({ courseAdmins: true, courseId: course.id, emailOnly: true, type: 'course_access_pending', title: 'Course access request', message: `A student requested access to "${course.title}".`, link: '/admin' });
   };
 
   const filtered = courses.filter(c => {
@@ -281,6 +295,7 @@ export default function Catalog() {
                 const track = tracks[course.track] ?? TRACK_FALLBACK;
                 const level = levelColors[course.level];
                 const isEnrolled = enrolled.includes(course.id);
+                const requestStatus = accessRequests[course.id];
                 return (
                   <div key={course.id} style={{
                     background: '#22262B', border: '1px solid #2A2F35',
@@ -345,11 +360,12 @@ export default function Catalog() {
                     </div>
 
                     <button onClick={() => {
+                      if (!isEnrolled && course.requires_enrollment_approval && requestStatus === 'pending') return;
                       if (isEnrolled) {
                         const lessonId = resumeMap[course.id] || '1';
                         window.location.href = `/lesson/${course.id}/${lessonId}`;
                       } else {
-                        enrollInCourse(course.id);
+                        course.requires_enrollment_approval ? requestCourseAccess(course) : enrollInCourse(course.id);
                       }
                     }} style={{
                       padding: '10px 0', borderRadius: 50,
@@ -359,7 +375,7 @@ export default function Catalog() {
                       fontSize: 13, fontWeight: 700, cursor: 'pointer',
                       fontFamily: 'DM Sans, sans-serif', transition: 'all 0.2s',
                     }}>
-                      {isEnrolled ? 'Go to course' : 'Enroll'}
+                      {isEnrolled ? 'Go to course' : course.requires_enrollment_approval ? requestStatus === 'pending' ? 'Access requested' : requestStatus === 'rejected' ? 'Request access again' : 'Request access' : 'Enroll'}
                     </button>
                   </div>
                 );

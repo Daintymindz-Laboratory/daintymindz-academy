@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useUser } from '@/lib/user-context';
 import NotificationBell from '@/components/NotificationBell';
+import { notify } from '@/lib/notify';
 
 import type { TracksMap } from '@/lib/user-context';
 
@@ -19,6 +20,8 @@ type Course = {
   progress: number;
   enrolled: boolean;
   resumeLessonId: number | null;
+  requires_enrollment_approval: boolean;
+  accessRequestStatus?: 'pending' | 'approved' | 'rejected';
 };
 
 type UserProfile = { name: string; track: string; streak: number; certsEarned: number; isAdmin: boolean; };
@@ -46,6 +49,7 @@ function CourseCard({ course, tracks, recommended = false, onEnroll }: { course:
   const track = tracks[course.track] ?? { ...TRACK_FALLBACK, label: course.track };
   const level = levelColors[course.level] ?? { bg: 'rgba(107,114,128,0.12)', color: '#6B7280' };
   const [enrolled, setEnrolled] = useState(course.enrolled);
+  const [requestStatus, setRequestStatus] = useState(course.accessRequestStatus);
 
   return (
     <div style={{
@@ -119,13 +123,21 @@ function CourseCard({ course, tracks, recommended = false, onEnroll }: { course:
           if (enrolled) {
             window.location.href = `/lesson/${course.id}/1`;
           } else {
+            if (course.requires_enrollment_approval && requestStatus === 'pending') return;
             const { createClient } = await import('@/lib/supabase');
             const supabase = createClient();
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-              await supabase.from('enrollments').insert({ user_id: user.id, course_id: course.id });
-              setEnrolled(true);
-              if (onEnroll) onEnroll(course.id);
+              if (course.requires_enrollment_approval) {
+                const { error } = await supabase.from('course_enrollment_requests').upsert({ user_id: user.id, course_id: course.id, status: 'pending', updated_at: new Date().toISOString() }, { onConflict: 'course_id,user_id' });
+                if (error) { window.alert(error.message); return; }
+                setRequestStatus('pending');
+                void notify({ courseAdmins: true, courseId: course.id, emailOnly: true, type: 'course_access_pending', title: 'Course access request', message: `A student requested access to "${course.title}".`, link: '/admin' });
+              } else {
+                await supabase.from('enrollments').insert({ user_id: user.id, course_id: course.id });
+                setEnrolled(true);
+                if (onEnroll) onEnroll(course.id);
+              }
             }
           }
         }}
@@ -139,7 +151,7 @@ function CourseCard({ course, tracks, recommended = false, onEnroll }: { course:
           transition: 'all 0.2s',
         }}
       >
-        {enrolled ? (course.progress > 0 ? 'Continue learning' : 'Start course') : 'Enroll'}
+        {enrolled ? (course.progress > 0 ? 'Continue learning' : 'Start course') : course.requires_enrollment_approval ? requestStatus === 'pending' ? 'Access requested' : requestStatus === 'rejected' ? 'Request access again' : 'Request access' : 'Enroll'}
       </button>
     </div>
   );
@@ -180,12 +192,14 @@ export default function Dashboard() {
         { data: enrollments, error: enrollError },
         { data: progressData, error: progressError },
         { data: certsData },
+        { data: accessRequests },
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', authUser.id).single(),
         supabase.from('courses').select('*').order('id'),
         supabase.from('enrollments').select('course_id').eq('user_id', authUser.id),
         supabase.from('progress').select('course_id, percentage, completed_lessons').eq('user_id', authUser.id),
         supabase.from('certificates').select('id').eq('user_id', authUser.id),
+        supabase.from('course_enrollment_requests').select('course_id,status').eq('user_id', authUser.id),
       ]);
 
       if (profileError) console.error('Profile fetch error:', profileError);
@@ -218,6 +232,7 @@ export default function Dashboard() {
 
       const enrolledIds = enrollments?.map((e: any) => e.course_id) || [];
       const progressMap = Object.fromEntries((progressData || []).map((p: any) => [p.course_id, p.percentage]));
+      const requestMap = Object.fromEntries((accessRequests || []).map((request: any) => [request.course_id, request.status]));
 
       // Fetch lesson IDs for enrolled courses to compute resume lesson
       let resumeLessonIdMap: Record<number, number | null> = {};
@@ -245,6 +260,7 @@ export default function Dashboard() {
           enrolled: enrolledIds.includes(c.id),
           progress: progressMap[c.id] || 0,
           resumeLessonId: resumeLessonIdMap[Number(c.id)] ?? null,
+          accessRequestStatus: requestMap[c.id],
         })));
       }
 

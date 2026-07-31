@@ -12,6 +12,7 @@ interface Submission {
 
 interface Props {
   lessonId: number;
+  courseId: number;
   userId: string;
   trackColor: string;
   isCompleted: boolean;
@@ -40,7 +41,7 @@ function submissionErrorMessage(error: { code?: string; message: string }) {
   return error.message;
 }
 
-export default function LessonSubmission({ lessonId, userId, trackColor, isCompleted, onComplete }: Props) {
+export default function LessonSubmission({ lessonId, courseId, userId, trackColor, isCompleted, onComplete }: Props) {
   const [loading, setLoading] = useState(!isCompleted);
   const [latest, setLatest] = useState<Submission | null>(null);
   const [url, setUrl] = useState('');
@@ -88,7 +89,8 @@ export default function LessonSubmission({ lessonId, userId, trackColor, isCompl
     setLatest(data);
     setSubmitting(false);
     notify({
-      adminBroadcast: true,
+      courseAdmins: true,
+      courseId,
       type: 'project_submitted',
       title: 'New task submission',
       message: 'A student submitted a task for instructor review.',

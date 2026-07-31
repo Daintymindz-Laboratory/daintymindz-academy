@@ -2,6 +2,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { notify } from '@/lib/notify';
 
 export default function SignUp() {
   const [name, setName] = useState('');
@@ -52,6 +53,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         }
       });
       if (error) { setError(error.message); setLoading(false); return; }
+      await notify({ adminBroadcast: true, emailOnly: true, type: 'account_pending', title: 'New account awaiting approval', message: `${name || email} requested access to Daintymindz Academy.`, link: '/admin' });
       window.location.href = '/pending-approval';
     } catch {
       setError('Something went wrong. Please try again.');
