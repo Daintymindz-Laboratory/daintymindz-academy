@@ -73,12 +73,15 @@ BEGIN
     RAISE EXCEPTION 'Invalid request status';
   END IF;
 
-  SELECT request, course.title INTO request_row, course_title
+  SELECT request.* INTO request_row
   FROM public.course_enrollment_requests request
-  JOIN public.courses course ON course.id = request.course_id
   WHERE request.id = p_request_id;
 
   IF request_row.id IS NULL THEN RAISE EXCEPTION 'Enrollment request not found'; END IF;
+
+  SELECT course.title INTO course_title
+  FROM public.courses course
+  WHERE course.id = request_row.course_id;
   IF NOT EXISTS (
     SELECT 1 FROM public.courses course
     WHERE course.id = request_row.course_id
