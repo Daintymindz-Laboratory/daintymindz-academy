@@ -155,6 +155,9 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'submissions' | 'enrollment_requests' | 'messages'>('courses');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [enrollmentRequests, setEnrollmentRequests] = useState<EnrollmentRequest[]>([]);
+  const [enrollmentRequestsLoading, setEnrollmentRequestsLoading] = useState(false);
+  const [enrollmentRequestsError, setEnrollmentRequestsError] = useState('');
+  const [enrollmentRequestFilter, setEnrollmentRequestFilter] = useState<'pending' | 'all'>('pending');
   const [reviewingEnrollment, setReviewingEnrollment] = useState<number | null>(null);
   const [tracks, setTracks] = useState<Track[]>(Object.entries(FALLBACK_TRACKS).map(([code, t]) => ({ code, ...t })));
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
@@ -416,8 +419,16 @@ export default function AdminPage() {
   };
 
   const loadEnrollmentRequests = async (supabase: any) => {
+    setEnrollmentRequestsLoading(true);
+    setEnrollmentRequestsError('');
     const { data, error } = await supabase.from('course_enrollment_requests').select('*').order('created_at', { ascending: false });
-    if (error) { console.error('loadEnrollmentRequests error:', error); return; }
+    if (error) {
+      console.error('loadEnrollmentRequests error:', error);
+      setEnrollmentRequests([]);
+      setEnrollmentRequestsError(error.message);
+      setEnrollmentRequestsLoading(false);
+      return;
+    }
     const userIds = [...new Set((data || []).map((request: any) => request.user_id))];
     const courseIds = [...new Set((data || []).map((request: any) => request.course_id))];
     const [{ data: profiles }, { data: requestCourses }] = await Promise.all([
@@ -432,6 +443,7 @@ export default function AdminPage() {
       student_email: profileMap[request.user_id]?.email || '',
       course_title: courseMap[request.course_id] || 'Course',
     })));
+    setEnrollmentRequestsLoading(false);
   };
 
   useEffect(() => {
@@ -924,6 +936,13 @@ export default function AdminPage() {
     textTransform: 'uppercase' as const, marginBottom: 6,
     fontFamily: 'JetBrains Mono, monospace',
   };
+
+  const approvalCourses = courses.filter(course => course.requires_enrollment_approval && (
+    course.created_by === adminId || course.instructor_ids?.includes(adminId)
+  ));
+  const visibleEnrollmentRequests = enrollmentRequestFilter === 'pending'
+    ? enrollmentRequests.filter(request => request.status === 'pending')
+    : enrollmentRequests;
 
   if (loading) return (
     <div style={{ background: '#1A1D21', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2140,14 +2159,50 @@ export default function AdminPage() {
 
           {activeTab === 'enrollment_requests' && (
             <div>
-              <div style={{ marginBottom: '2rem' }}>
+              <div style={{ marginBottom: '1.5rem' }}>
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// course access'}</div>
-                <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Enrollment Requests</h1>
-                <p style={{ fontSize: 13, color: '#6B7280', marginTop: 5 }}>{enrollmentRequests.filter(request => request.status === 'pending').length} request(s) awaiting your review</p>
+                <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Course Access</h1>
+                <p style={{ fontSize: 13, color: '#6B7280', marginTop: 5 }}>Approve learners for restricted courses assigned to you. This is separate from Academy account approval under Students.</p>
+              </div>
+
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 11, color: '#9CA3AF', fontFamily: 'JetBrains Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Restricted courses you manage</div>
+                {approvalCourses.length === 0 ? (
+                  <div style={{ padding: '18px 20px', background: '#22262B', border: '1px solid #2A2F35', borderRadius: 14, color: '#9CA3AF', fontSize: 13 }}>
+                    No course assigned to you currently requires approval. Turn on <strong style={{ color: '#F5F5F5' }}>Require approval before enrollment</strong> while creating or editing a course.
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+                    {approvalCourses.map(course => {
+                      const pending = enrollmentRequests.filter(request => request.course_id === course.id && request.status === 'pending').length;
+                      return (
+                        <div key={course.id} style={{ padding: '15px 17px', background: '#22262B', border: '1px solid #2A2F35', borderRadius: 14 }}>
+                          <div style={{ color: '#F5F5F5', fontSize: 14, fontWeight: 700 }}>{course.title}</div>
+                          <div style={{ color: pending ? '#D59C10' : '#6B7280', fontSize: 11, marginTop: 6, fontFamily: 'JetBrains Mono, monospace' }}>{pending} pending request{pending === 1 ? '' : 's'}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <div style={{ color: '#F5F5F5', fontSize: 16, fontWeight: 700 }}>Learner requests</div>
+                  <div style={{ color: '#6B7280', fontSize: 12, marginTop: 3 }}>{enrollmentRequests.filter(request => request.status === 'pending').length} awaiting review</div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['pending', 'all'] as const).map(filter => (
+                    <button key={filter} onClick={() => setEnrollmentRequestFilter(filter)} style={{ padding: '7px 14px', borderRadius: 20, border: enrollmentRequestFilter === filter ? '1px solid rgba(213,156,16,0.45)' : '1px solid #3A3F46', background: enrollmentRequestFilter === filter ? 'rgba(213,156,16,0.1)' : 'transparent', color: enrollmentRequestFilter === filter ? '#D59C10' : '#9CA3AF', cursor: 'pointer', textTransform: 'capitalize' }}>{filter === 'all' ? 'History' : 'Pending'}</button>
+                  ))}
+                  <button onClick={async () => { const { createClient } = await import('@/lib/supabase'); await loadEnrollmentRequests(createClient()); }} style={{ padding: '7px 14px', borderRadius: 20, border: '1px solid #3A3F46', background: 'transparent', color: '#9CA3AF', cursor: 'pointer' }}>Refresh</button>
+                </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {enrollmentRequests.length === 0 && <div style={{ padding: '3rem', textAlign: 'center', color: '#6B7280', background: '#22262B', borderRadius: 16 }}>No course access requests.</div>}
-                {enrollmentRequests.map(request => (
+                {enrollmentRequestsLoading && <div style={{ padding: '3rem', textAlign: 'center', color: '#D59C10', background: '#22262B', borderRadius: 16 }}>Loading course access requests...</div>}
+                {!enrollmentRequestsLoading && enrollmentRequestsError && <div style={{ padding: '18px 20px', color: '#FCA5A5', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 14 }}><strong>Course access could not load.</strong><div style={{ marginTop: 6, fontSize: 12 }}>{enrollmentRequestsError}</div><div style={{ marginTop: 8, fontSize: 12, color: '#9CA3AF' }}>Run the course enrollment approval migration in Supabase, then refresh this page.</div></div>}
+                {!enrollmentRequestsLoading && !enrollmentRequestsError && visibleEnrollmentRequests.length === 0 && <div style={{ padding: '3rem', textAlign: 'center', color: '#6B7280', background: '#22262B', borderRadius: 16 }}>{enrollmentRequestFilter === 'pending' ? 'No pending course access requests. Requests will appear here after a learner clicks Request access on a restricted course.' : 'No course access request history yet.'}</div>}
+                {!enrollmentRequestsLoading && !enrollmentRequestsError && visibleEnrollmentRequests.map(request => (
                   <div key={request.id} style={{ padding: '16px 18px', background: '#22262B', border: '1px solid #2A2F35', borderRadius: 14, display: 'flex', alignItems: 'center', gap: 16 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ color: '#F5F5F5', fontSize: 14, fontWeight: 700 }}>{request.student_name}</div>
