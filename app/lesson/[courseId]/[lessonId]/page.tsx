@@ -222,7 +222,7 @@ export default function LessonPage() {
         const certId = `CERT-DM-${new Date().getFullYear()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
         await supabase.from('certificates').insert({ user_id: userId, course_id: parseInt(courseId), cert_id: certId });
         notify({ userId, type: 'course_completed', title: 'Course completed!', message: `Congratulations! You completed "${course?.title}" and earned a certificate.`, link: '/certificates' });
-        notify({ adminBroadcast: true, excludeUserId: userId, type: 'course_completed', title: 'Student completed a course', message: `A student completed "${course?.title}" and earned a certificate.`, link: '/admin' });
+        notify({ courseAdmins: true, courseId: Number(courseId), excludeUserId: userId, type: 'course_completed', title: 'Student completed a course', message: `A student completed "${course?.title}" and earned a certificate.`, link: '/admin' });
         setShowRating(true);
       } else {
         window.location.href = '/certificates';
@@ -410,6 +410,7 @@ export default function LessonPage() {
                 <LessonSubmission
                   key={currentLesson.id}
                   lessonId={Number(currentLesson.id)}
+                  courseId={Number(courseId)}
                   userId={userId}
                   trackColor={trackColor}
                   isCompleted={isCompleted}

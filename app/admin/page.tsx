@@ -21,6 +21,7 @@ type Course = {
   instructor_ids?: string[];
   archived_at?: string | null;
   archived_by?: string | null;
+  requires_enrollment_approval: boolean;
 };
 
 type Profile = {
@@ -91,6 +92,18 @@ type Submission = {
   grading_decision: 'pass' | 'revise' | 'not_yet' | null;
 };
 
+type EnrollmentRequest = {
+  id: number;
+  course_id: number;
+  user_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  note: string | null;
+  created_at: string;
+  student_name: string;
+  student_email: string;
+  course_title: string;
+};
+
 const FALLBACK_TRACKS: Record<string, { label: string; color: string }> = Object.fromEntries(
   Object.entries(BASE_FALLBACK_TRACKS).map(([k, v]) => [k, { label: v.label, color: v.color }])
 );
@@ -99,7 +112,7 @@ type Track = { code: string; label: string; color: string };
 
 const EMPTY_COURSE: Course = {
   title: '', track: 'AI', level: 'Beginner',
-  lessons_count: 0, duration: '', description: '',
+  lessons_count: 0, duration: '', description: '', requires_enrollment_approval: false,
 };
 
 const FRESHLAB_RUBRIC: RubricCriterion[] = [
@@ -139,8 +152,10 @@ export default function AdminPage() {
   const [adminProfiles, setAdminProfiles] = useState<{ id: string; full_name: string; position: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const [adminLoadError, setAdminLoadError] = useState('');
-  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'submissions' | 'messages'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'students' | 'lessons' | 'analytics' | 'tracks' | 'submissions' | 'enrollment_requests' | 'messages'>('courses');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [enrollmentRequests, setEnrollmentRequests] = useState<EnrollmentRequest[]>([]);
+  const [reviewingEnrollment, setReviewingEnrollment] = useState<number | null>(null);
   const [tracks, setTracks] = useState<Track[]>(Object.entries(FALLBACK_TRACKS).map(([code, t]) => ({ code, ...t })));
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
   const [savingTrack, setSavingTrack] = useState(false);
@@ -388,16 +403,57 @@ export default function AdminPage() {
     }
     if (status === 'approved') {
       notify({ userId: selectedSubmission.user_id, type: 'submission_approved', title: 'Submission approved!', message: `Your project for "${selectedSubmission.lesson_title}" has been approved. Great work!`, link: `/lesson/${selectedSubmission.course_id}/${selectedSubmission.lesson_id}` });
-      notify({ adminBroadcast: true, excludeUserId: selectedSubmission.user_id, type: 'submission_approved', title: 'Submission approved', message: `${selectedSubmission.student_name}'s submission for "${selectedSubmission.lesson_title}" was approved.`, link: '/admin' });
+      notify({ courseAdmins: true, courseId: selectedSubmission.course_id, excludeUserId: selectedSubmission.user_id, type: 'submission_approved', title: 'Submission approved', message: `${selectedSubmission.student_name}'s submission for "${selectedSubmission.lesson_title}" was approved.`, link: '/admin' });
     } else {
       notify({ userId: selectedSubmission.user_id, type: 'submission_rework', title: 'Submission needs rework', message: `Your project for "${selectedSubmission.lesson_title}" needs some changes. Feedback: ${gradingFeedback.trim()}`, link: `/lesson/${selectedSubmission.course_id}/${selectedSubmission.lesson_id}` });
-      notify({ adminBroadcast: true, excludeUserId: selectedSubmission.user_id, type: 'submission_rework', title: 'Submission returned for rework', message: `${selectedSubmission.student_name}'s submission for "${selectedSubmission.lesson_title}" was returned for changes.`, link: '/admin' });
+      notify({ courseAdmins: true, courseId: selectedSubmission.course_id, excludeUserId: selectedSubmission.user_id, type: 'submission_rework', title: 'Submission returned for rework', message: `${selectedSubmission.student_name}'s submission for "${selectedSubmission.lesson_title}" was returned for changes.`, link: '/admin' });
     }
     await loadSubmissions(supabase);
     setSelectedSubmission(null);
     setGradingFeedback('');
     setGrading(false);
     showToast(status === 'approved' ? 'Submission approved!' : 'Returned for rework.');
+  };
+
+  const loadEnrollmentRequests = async (supabase: any) => {
+    const { data, error } = await supabase.from('course_enrollment_requests').select('*').order('created_at', { ascending: false });
+    if (error) { console.error('loadEnrollmentRequests error:', error); return; }
+    const userIds = [...new Set((data || []).map((request: any) => request.user_id))];
+    const courseIds = [...new Set((data || []).map((request: any) => request.course_id))];
+    const [{ data: profiles }, { data: requestCourses }] = await Promise.all([
+      userIds.length ? supabase.from('profiles').select('id,full_name,email').in('id', userIds) : Promise.resolve({ data: [] }),
+      courseIds.length ? supabase.from('courses').select('id,title').in('id', courseIds) : Promise.resolve({ data: [] }),
+    ]);
+    const profileMap = Object.fromEntries((profiles || []).map((profile: any) => [profile.id, profile]));
+    const courseMap = Object.fromEntries((requestCourses || []).map((course: any) => [course.id, course.title]));
+    setEnrollmentRequests((data || []).map((request: any) => ({
+      ...request,
+      student_name: profileMap[request.user_id]?.full_name || 'Student',
+      student_email: profileMap[request.user_id]?.email || '',
+      course_title: courseMap[request.course_id] || 'Course',
+    })));
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'enrollment_requests' || !adminId) return;
+    void (async () => {
+      const { createClient } = await import('@/lib/supabase');
+      await loadEnrollmentRequests(createClient());
+    })();
+  }, [activeTab, adminId]);
+
+  const reviewEnrollmentRequest = async (request: EnrollmentRequest, status: 'approved' | 'rejected') => {
+    setReviewingEnrollment(request.id);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { error } = await supabase.rpc('review_course_enrollment_request', { p_request_id: request.id, p_status: status });
+    if (error) showToast(`Could not review request: ${error.message}`);
+    else {
+      await loadEnrollmentRequests(supabase);
+      showToast(`${request.student_name}'s course access was ${status}.`);
+      void notify({ userId: request.user_id, emailOnly: true, type: `course_access_${status}`, title: status === 'approved' ? 'Course access approved' : 'Course access request declined', message: status === 'approved' ? `Your request to join "${request.course_title}" was approved.` : `Your request to join "${request.course_title}" was declined.`, link: status === 'approved' ? '/my-courses' : '/catalog' });
+    }
+    setReviewingEnrollment(null);
   };
 
   const openSubmissionReview = (submission: Submission) => {
@@ -431,6 +487,7 @@ export default function AdminPage() {
     else {
       await loadStudents(supabase);
       showToast(`${student.full_name}'s access was ${status}.`);
+      void notify({ userId: student.id, emailOnly: true, type: `account_${status}`, title: status === 'approved' ? 'Academy access approved' : 'Academy access request declined', message: status === 'approved' ? 'Your Daintymindz Academy account has been approved.' : 'Your Daintymindz Academy access request was declined.', link: status === 'approved' ? '/dashboard' : '/pending-approval' });
     }
     setUpdatingApproval(null);
   };
@@ -704,6 +761,7 @@ export default function AdminPage() {
         description: editingCourse.description,
         created_by: primaryInstructorId,
         instructor_ids: instructorIds,
+        requires_enrollment_approval: editingCourse.requires_enrollment_approval,
       }).eq('id', editingCourse.id);
       showToast('Course updated!');
     } else {
@@ -716,6 +774,7 @@ export default function AdminPage() {
         description: editingCourse.description,
         created_by: primaryInstructorId,
         instructor_ids: instructorIds,
+        requires_enrollment_approval: editingCourse.requires_enrollment_approval,
       });
       showToast('Course created!');
     }
@@ -918,6 +977,7 @@ export default function AdminPage() {
               { id: 'students', label: 'Students', icon: '⊞' },
               { id: 'analytics', label: 'Analytics', icon: '◈' },
               { id: 'tracks', label: 'Tracks', icon: '◑' },
+              { id: 'enrollment_requests', label: 'Course Access', icon: '🔐' },
               { id: 'submissions', label: 'Submissions', icon: '◧' },
               { id: 'messages', label: 'Messages', icon: '✉' },
             ].map(item => (
@@ -1035,6 +1095,15 @@ export default function AdminPage() {
                         rows={3}
                         style={{ ...inputStyle, height: 'auto', padding: '10px 14px', resize: 'vertical' as const, lineHeight: 1.6 }}
                       />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1', padding: '14px 16px', border: '1px solid #3A3F46', borderRadius: 12, background: '#1A1D21' }}>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={editingCourse.requires_enrollment_approval} onChange={event => setEditingCourse(course => ({ ...course, requires_enrollment_approval: event.target.checked }))} style={{ marginTop: 3, accentColor: '#D59C10' }} />
+                        <span>
+                          <span style={{ display: 'block', color: '#F5F5F5', fontSize: 13, fontWeight: 700 }}>Require approval before enrollment</span>
+                          <span style={{ display: 'block', color: '#6B7280', fontSize: 11, marginTop: 3 }}>Students must request access. Assigned course instructors approve or decline the request before the course can be opened.</span>
+                        </span>
+                      </label>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
@@ -2055,6 +2124,34 @@ export default function AdminPage() {
                       <button onClick={() => setEditingTrack({ ...t })} style={{ background: 'transparent', border: '1px solid #3A3F46', borderRadius: 20, padding: '5px 14px', fontSize: 12, color: '#F5F5F5', cursor: 'pointer' }}>Edit</button>
                       <button onClick={() => deleteTrack(t.code)} style={{ background: 'transparent', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 20, padding: '5px 14px', fontSize: 12, color: '#F87171', cursor: 'pointer' }}>Delete</button>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'enrollment_requests' && (
+            <div>
+              <div style={{ marginBottom: '2rem' }}>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// course access'}</div>
+                <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Enrollment Requests</h1>
+                <p style={{ fontSize: 13, color: '#6B7280', marginTop: 5 }}>{enrollmentRequests.filter(request => request.status === 'pending').length} request(s) awaiting your review</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {enrollmentRequests.length === 0 && <div style={{ padding: '3rem', textAlign: 'center', color: '#6B7280', background: '#22262B', borderRadius: 16 }}>No course access requests.</div>}
+                {enrollmentRequests.map(request => (
+                  <div key={request.id} style={{ padding: '16px 18px', background: '#22262B', border: '1px solid #2A2F35', borderRadius: 14, display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: '#F5F5F5', fontSize: 14, fontWeight: 700 }}>{request.student_name}</div>
+                      <div style={{ color: '#9CA3AF', fontSize: 12, marginTop: 3 }}>{request.student_email}</div>
+                      <div style={{ color: '#D59C10', fontSize: 12, marginTop: 5 }}>{request.course_title}</div>
+                      <div style={{ color: '#6B7280', fontSize: 10, marginTop: 4 }}>{new Date(request.created_at).toLocaleString()}</div>
+                    </div>
+                    <span style={{ color: request.status === 'approved' ? '#4CAF7D' : request.status === 'rejected' ? '#F87171' : '#D59C10', fontSize: 11, fontWeight: 700, textTransform: 'uppercase' }}>{request.status}</span>
+                    {request.status === 'pending' && <div style={{ display: 'flex', gap: 8 }}>
+                      <button disabled={reviewingEnrollment === request.id} onClick={() => reviewEnrollmentRequest(request, 'approved')} style={{ background: '#4CAF7D', border: 'none', borderRadius: 20, padding: '7px 16px', color: '#1A1D21', fontWeight: 700, cursor: 'pointer' }}>Approve</button>
+                      <button disabled={reviewingEnrollment === request.id} onClick={() => reviewEnrollmentRequest(request, 'rejected')} style={{ background: 'transparent', border: '1px solid rgba(248,113,113,0.4)', borderRadius: 20, padding: '7px 16px', color: '#F87171', cursor: 'pointer' }}>Decline</button>
+                    </div>}
                   </div>
                 ))}
               </div>

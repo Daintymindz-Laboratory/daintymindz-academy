@@ -152,7 +152,7 @@ export default function ProjectLesson({
       setSubmission({ ...data, status: data.status === 'rejected' ? 'rework' : data.status, submitted_at: data.created_at });
       setShowSubmitForm(false);
       setSubmitNote('');
-      notify({ adminBroadcast: true, excludeUserId: userId, type: 'project_submitted', title: 'New project submission', message: 'A student submitted a project for review.', link: '/admin' });
+      notify({ courseAdmins: true, courseId, excludeUserId: userId, type: 'project_submitted', title: 'New project submission', message: 'A student submitted a project for review.', link: '/admin' });
     }
     setSubmitting(false);
   };
@@ -327,6 +327,7 @@ export default function ProjectLesson({
                 <LessonSubmission
                   key={lessonId}
                   lessonId={lessonId}
+                  courseId={courseId}
                   userId={userId}
                   trackColor={trackColor}
                   isCompleted={isCompleted}

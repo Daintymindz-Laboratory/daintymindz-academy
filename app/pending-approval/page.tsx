@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 export default function PendingApprovalPage() {
   const [status, setStatus] = useState<'loading' | 'pending' | 'rejected' | 'signed_out'>('loading');
+  const [approvedPopup, setApprovedPopup] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -14,6 +15,12 @@ export default function PendingApprovalPage() {
       const { data } = await supabase.from('profiles').select('approval_status').eq('id', user.id).maybeSingle();
       if (data?.approval_status === 'approved') { window.location.href = '/dashboard'; return; }
       setStatus(data?.approval_status === 'rejected' ? 'rejected' : 'pending');
+      const channel = supabase.channel(`approval:${user.id}`).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, payload => {
+        const notification = payload.new as { type?: string };
+        if (notification.type === 'account_approved') setApprovedPopup(true);
+        if (notification.type === 'account_rejected') setStatus('rejected');
+      }).subscribe();
+      return () => { void supabase.removeChannel(channel); };
     })();
   }, []);
 
@@ -25,6 +32,14 @@ export default function PendingApprovalPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#1A1D21', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: 'DM Sans, sans-serif' }}>
+      {approvedPopup && <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ width: '100%', maxWidth: 430, padding: '2rem', background: '#22262B', border: '1px solid rgba(76,175,125,0.45)', borderRadius: 18, textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+          <div style={{ fontSize: 36, marginBottom: 12 }}>✓</div>
+          <h2 style={{ color: '#F5F5F5', fontSize: 22, marginBottom: 8 }}>Your account was approved</h2>
+          <p style={{ color: '#9CA3AF', fontSize: 14, lineHeight: 1.6, marginBottom: 22 }}>Welcome to Daintymindz Academy. You can now access your dashboard and available courses.</p>
+          <button onClick={() => window.location.href = '/dashboard'} style={{ background: '#4CAF7D', border: 'none', borderRadius: 50, padding: '10px 26px', color: '#1A1D21', fontWeight: 700, cursor: 'pointer' }}>Continue to dashboard</button>
+        </div>
+      </div>}
       <div style={{ width: '100%', maxWidth: 520, background: '#22262B', border: '1px solid #2A2F35', borderRadius: 20, padding: '2.5rem', textAlign: 'center' }}>
         <Image src="/logo.png" alt="Daintymindz" width={120} height={44} style={{ objectFit: 'contain', marginBottom: 24 }} />
         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: status === 'rejected' ? '#F87171' : '#D59C10', letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 12 }}>
