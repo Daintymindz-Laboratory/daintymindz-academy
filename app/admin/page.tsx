@@ -138,6 +138,8 @@ export default function AdminPage() {
     totalCerts: number;
     enrollmentsByCourse: { title: string; track: string; count: number }[];
     avgCompletionByCourse: { title: string; track: string; avg: number }[];
+    enrollmentsByTrack: { track: string; count: number; color: string }[];
+    completionDistribution: { label: string; count: number; color: string }[];
   };
 
   type StudentDetail = {
@@ -556,12 +558,36 @@ export default function AdminPage() {
       .sort((a, b) => b.avg - a.avg)
       .slice(0, 8);
 
+    const trackEnrollCount: Record<string, number> = {};
+    (enrollData || []).forEach((e: any) => {
+      const track = courseMap[e.course_id]?.track || 'other';
+      trackEnrollCount[track] = (trackEnrollCount[track] || 0) + 1;
+    });
+    const enrollmentsByTrack = Object.entries(trackEnrollCount)
+      .map(([track, count]) => ({ track, count, color: FALLBACK_TRACKS[track as keyof typeof FALLBACK_TRACKS]?.color || '#6B7280' }))
+      .sort((a, b) => b.count - a.count);
+
+    const progBuckets = { 'Not Started': 0, 'In Progress': 0, 'Completed': 0 };
+    (progressData || []).forEach((p: any) => {
+      const pct = p.percentage || 0;
+      if (pct === 0) progBuckets['Not Started']++;
+      else if (pct >= 100) progBuckets['Completed']++;
+      else progBuckets['In Progress']++;
+    });
+    const completionDistribution = [
+      { label: 'Not Started', count: progBuckets['Not Started'], color: '#3A3F46' },
+      { label: 'In Progress', count: progBuckets['In Progress'], color: '#4E8FD4' },
+      { label: 'Completed', count: progBuckets['Completed'], color: '#4CAF7D' },
+    ];
+
     setAnalytics({
       totalStudents: (await supabase.from('profiles').select('id', { count: 'exact', head: true })).count || 0,
       totalEnrollments: (enrollData || []).length,
       totalCerts: (certsData || []).length,
       enrollmentsByCourse,
       avgCompletionByCourse,
+      enrollmentsByTrack,
+      completionDistribution,
     });
   };
 
@@ -1951,64 +1977,153 @@ export default function AdminPage() {
                 <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// analytics'}</div>
                 <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5', letterSpacing: '-0.02em' }}>Analytics</h1>
               </div>
-              {analytics ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-                    {[
-                      { label: 'Total Students', value: analytics.totalStudents, color: '#D59C10' },
-                      { label: 'Total Enrollments', value: analytics.totalEnrollments, color: '#4E8FD4' },
-                      { label: 'Certificates Issued', value: analytics.totalCerts, color: '#4CAF7D' },
-                    ].map(stat => (
-                      <div key={stat.label} style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
-                        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#6B7280', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>{stat.label}</div>
-                        <div style={{ fontSize: 36, fontWeight: 700, color: stat.color }}>{stat.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {analytics ? (() => {
+                const barMax = analytics.enrollmentsByCourse[0]?.count || 1;
+                const chartH = 140;
+                const barW = 36;
+                const barGap = 14;
+                const barCount = analytics.enrollmentsByCourse.length;
+                const svgW = barCount * (barW + barGap) + barGap;
+
+                const donutTotal = analytics.enrollmentsByTrack.reduce((s, t) => s + t.count, 0) || 1;
+                const donutR = 54;
+                const donutCx = 80;
+                const donutCy = 80;
+                const donutThick = 22;
+                let donutAngle = -Math.PI / 2;
+                const donutSlices = analytics.enrollmentsByTrack.map(t => {
+                  const angle = (t.count / donutTotal) * 2 * Math.PI;
+                  const x1 = donutCx + donutR * Math.cos(donutAngle);
+                  const y1 = donutCy + donutR * Math.sin(donutAngle);
+                  donutAngle += angle;
+                  const x2 = donutCx + donutR * Math.cos(donutAngle);
+                  const y2 = donutCy + donutR * Math.sin(donutAngle);
+                  const large = angle > Math.PI ? 1 : 0;
+                  return { ...t, x1, y1, x2, y2, large, angle };
+                });
+
+                const distTotal = analytics.completionDistribution.reduce((s, d) => s + d.count, 0) || 1;
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                      {[
+                        { label: 'Total Students', value: analytics.totalStudents, color: '#D59C10' },
+                        { label: 'Total Enrollments', value: analytics.totalEnrollments, color: '#4E8FD4' },
+                        { label: 'Certificates Issued', value: analytics.totalCerts, color: '#4CAF7D' },
+                      ].map(stat => (
+                        <div key={stat.label} style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
+                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#6B7280', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>{stat.label}</div>
+                          <div style={{ fontSize: 36, fontWeight: 700, color: stat.color }}>{stat.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Bar chart: top enrolled courses */}
                     <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
-                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>Top Enrolled Courses</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {analytics.enrollmentsByCourse.map((c, i) => {
-                          const tColor = tracksMap[c.track]?.color || '#D59C10';
-                          return (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', width: 16 }}>{i + 1}</span>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, color: '#F5F5F5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</div>
-                                <div style={{ height: 4, background: '#2A2F35', borderRadius: 4, marginTop: 4 }}>
-                                  <div style={{ height: '100%', background: tColor, borderRadius: 4, width: `${Math.min((c.count / (analytics.enrollmentsByCourse[0]?.count || 1)) * 100, 100)}%` }} />
-                                </div>
-                              </div>
-                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: tColor, flexShrink: 0 }}>{c.count}</span>
-                            </div>
-                          );
-                        })}
+                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 18 }}>Enrollments by Course</div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <svg width={Math.max(svgW, 400)} height={chartH + 48} style={{ display: 'block' }}>
+                          {analytics.enrollmentsByCourse.map((c, i) => {
+                            const tColor = tracksMap[c.track]?.color || '#D59C10';
+                            const barH = Math.max(4, Math.round((c.count / barMax) * chartH));
+                            const x = barGap + i * (barW + barGap);
+                            const y = chartH - barH;
+                            return (
+                              <g key={i}>
+                                <rect x={x} y={chartH} width={barW} height={0} fill={tColor} rx={5} opacity={0.15} />
+                                <rect x={x} y={y} width={barW} height={barH} fill={tColor} rx={5} opacity={0.85} />
+                                <text x={x + barW / 2} y={y - 6} textAnchor="middle" fill={tColor} fontSize={11} fontFamily="JetBrains Mono, monospace">{c.count}</text>
+                                <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fill="#6B7280" fontSize={9} fontFamily="JetBrains Mono, monospace">
+                                  {c.title.length > 10 ? c.title.slice(0, 10) + '..' : c.title}
+                                </text>
+                              </g>
+                            );
+                          })}
+                          <line x1={0} y1={chartH} x2={Math.max(svgW, 400)} y2={chartH} stroke="#2A2F35" strokeWidth={1} />
+                        </svg>
                       </div>
                     </div>
-                    <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
-                      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#4CAF7D', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16 }}>Avg Completion by Course</div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {analytics.avgCompletionByCourse.map((c, i) => {
-                          const tColor = tracksMap[c.track]?.color || '#D59C10';
-                          return (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#3A3F46', width: 16 }}>{i + 1}</span>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, color: '#F5F5F5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title}</div>
-                                <div style={{ height: 4, background: '#2A2F35', borderRadius: 4, marginTop: 4 }}>
-                                  <div style={{ height: '100%', background: tColor, borderRadius: 4, width: `${c.avg}%` }} />
-                                </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      {/* Donut chart: enrollments by track */}
+                      <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
+                        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#4E8FD4', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 18 }}>Enrollments by Track</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+                          <svg width={160} height={160} style={{ flexShrink: 0 }}>
+                            {donutSlices.length === 0 || donutTotal === 0 ? (
+                              <circle cx={donutCx} cy={donutCy} r={donutR} fill="none" stroke="#2A2F35" strokeWidth={donutThick} />
+                            ) : donutSlices.length === 1 ? (
+                              <circle cx={donutCx} cy={donutCy} r={donutR} fill="none" stroke={donutSlices[0].color} strokeWidth={donutThick} opacity={0.85} />
+                            ) : donutSlices.map((s, i) => (
+                              <path
+                                key={i}
+                                d={`M ${s.x1} ${s.y1} A ${donutR} ${donutR} 0 ${s.large} 1 ${s.x2} ${s.y2}`}
+                                fill="none"
+                                stroke={s.color}
+                                strokeWidth={donutThick}
+                                opacity={0.85}
+                              />
+                            ))}
+                            <text x={donutCx} y={donutCy - 6} textAnchor="middle" fill="#F5F5F5" fontSize={20} fontWeight={700} fontFamily="DM Sans, sans-serif">{donutTotal}</text>
+                            <text x={donutCx} y={donutCy + 12} textAnchor="middle" fill="#6B7280" fontSize={10} fontFamily="JetBrains Mono, monospace">total</text>
+                          </svg>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+                            {analytics.enrollmentsByTrack.map((t, i) => (
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                                <div style={{ flex: 1, color: '#9CA3AF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'uppercase', fontFamily: 'JetBrains Mono, monospace', fontSize: 10 }}>{t.track}</div>
+                                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: t.color }}>{Math.round((t.count / donutTotal) * 100)}%</div>
                               </div>
-                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: '#6B7280', flexShrink: 0 }}>{c.avg}%</span>
+                            ))}
+                            {analytics.enrollmentsByTrack.length === 0 && (
+                              <div style={{ fontSize: 12, color: '#3A3F46' }}>No data yet</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Stacked bar: student progress distribution */}
+                      <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
+                        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#4CAF7D', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 18 }}>Student Progress Distribution</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                          {analytics.completionDistribution.map((d, i) => (
+                            <div key={i}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <span style={{ fontSize: 12, color: '#9CA3AF' }}>{d.label}</span>
+                                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: d.color }}>{d.count} <span style={{ color: '#3A3F46' }}>({Math.round((d.count / distTotal) * 100)}%)</span></span>
+                              </div>
+                              <div style={{ height: 8, background: '#2A2F35', borderRadius: 6 }}>
+                                <div style={{ height: '100%', background: d.color, borderRadius: 6, width: `${Math.round((d.count / distTotal) * 100)}%`, transition: 'width 0.4s ease' }} />
+                              </div>
                             </div>
-                          );
-                        })}
+                          ))}
+                        </div>
+                        <div style={{ marginTop: 24 }}>
+                          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#6B7280', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 14 }}>Avg Completion by Course</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {analytics.avgCompletionByCourse.map((c, i) => {
+                              const tColor = tracksMap[c.track]?.color || '#D59C10';
+                              return (
+                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#3A3F46', width: 14 }}>{i + 1}</span>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, color: '#F5F5F5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>{c.title}</div>
+                                    <div style={{ height: 4, background: '#2A2F35', borderRadius: 4 }}>
+                                      <div style={{ height: '100%', background: tColor, borderRadius: 4, width: `${c.avg}%` }} />
+                                    </div>
+                                  </div>
+                                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: '#6B7280', flexShrink: 0 }}>{c.avg}%</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ) : (
+                );
+              })() : (
                 <div style={{ color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>Loading analytics...</div>
               )}
             </div>
