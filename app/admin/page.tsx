@@ -1979,9 +1979,10 @@ export default function AdminPage() {
               </div>
               {analytics ? (() => {
                 const barMax = analytics.enrollmentsByCourse[0]?.count || 1;
-                const chartH = 140;
-                const barW = 36;
-                const barGap = 14;
+                const chartH = 160;
+                const labelH = 130;
+                const barW = 48;
+                const barGap = 20;
                 const barCount = analytics.enrollmentsByCourse.length;
                 const svgW = barCount * (barW + barGap) + barGap;
 
@@ -2023,24 +2024,30 @@ export default function AdminPage() {
                     <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
                       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 18 }}>Enrollments by Course</div>
                       <div style={{ overflowX: 'auto' }}>
-                        <svg width={Math.max(svgW, 400)} height={chartH + 48} style={{ display: 'block' }}>
+                        <svg width={Math.max(svgW, 500)} height={chartH + labelH} style={{ display: 'block' }}>
                           {analytics.enrollmentsByCourse.map((c, i) => {
                             const tColor = tracksMap[c.track]?.color || '#D59C10';
                             const barH = Math.max(4, Math.round((c.count / barMax) * chartH));
                             const x = barGap + i * (barW + barGap);
                             const y = chartH - barH;
+                            const cx = x + barW / 2;
                             return (
                               <g key={i}>
-                                <rect x={x} y={chartH} width={barW} height={0} fill={tColor} rx={5} opacity={0.15} />
-                                <rect x={x} y={y} width={barW} height={barH} fill={tColor} rx={5} opacity={0.85} />
-                                <text x={x + barW / 2} y={y - 6} textAnchor="middle" fill={tColor} fontSize={11} fontFamily="JetBrains Mono, monospace">{c.count}</text>
-                                <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fill="#6B7280" fontSize={9} fontFamily="JetBrains Mono, monospace">
-                                  {c.title.length > 10 ? c.title.slice(0, 10) + '..' : c.title}
-                                </text>
+                                <rect x={x} y={y} width={barW} height={barH} fill={tColor} rx={6} opacity={0.85} />
+                                <text x={cx} y={y - 7} textAnchor="middle" fill={tColor} fontSize={12} fontFamily="JetBrains Mono, monospace" fontWeight={700}>{c.count}</text>
+                                <text
+                                  x={cx}
+                                  y={chartH + 10}
+                                  textAnchor="end"
+                                  fill="#9CA3AF"
+                                  fontSize={11}
+                                  fontFamily="DM Sans, sans-serif"
+                                  transform={`rotate(-40, ${cx}, ${chartH + 10})`}
+                                >{c.title}</text>
                               </g>
                             );
                           })}
-                          <line x1={0} y1={chartH} x2={Math.max(svgW, 400)} y2={chartH} stroke="#2A2F35" strokeWidth={1} />
+                          <line x1={0} y1={chartH} x2={Math.max(svgW, 500)} y2={chartH} stroke="#2A2F35" strokeWidth={1} />
                         </svg>
                       </div>
                     </div>
