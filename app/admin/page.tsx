@@ -83,6 +83,7 @@ type Submission = {
   student_name: string;
   course_title: string;
   course_instructor: string;
+  course_instructor_id: string;
   lesson_title: string;
   rubric_criteria: RubricCriterion[];
   rubric_scores: Record<string, number>;
@@ -223,6 +224,32 @@ export default function AdminPage() {
   const [editingTestCase, setEditingTestCase] = useState<TestCase | null>(null);
   const [savingTestCase, setSavingTestCase] = useState(false);
 
+  type EnrollmentRow = { user_id: string; student_name: string; enrolled_at: string; progress: number };
+  const [enrollmentsCourse, setEnrollmentsCourse] = useState<Course | null>(null);
+  const [enrollmentsData, setEnrollmentsData] = useState<EnrollmentRow[]>([]);
+  const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
+
+  const viewEnrollments = async (course: Course) => {
+    setEnrollmentsCourse(course);
+    setEnrollmentsLoading(true);
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const [{ data: enrollData }, { data: progressData }, { data: profilesData }] = await Promise.all([
+      supabase.from('enrollments').select('user_id, enrolled_at').eq('course_id', course.id),
+      supabase.from('progress').select('user_id, percentage').eq('course_id', course.id),
+      supabase.from('profiles').select('id, full_name'),
+    ]);
+    const nameMap: Record<string, string> = Object.fromEntries((profilesData || []).map((p: any) => [p.id, p.full_name || 'Unknown']));
+    const progressMap: Record<string, number> = Object.fromEntries((progressData || []).map((p: any) => [p.user_id, p.percentage || 0]));
+    setEnrollmentsData((enrollData || []).map((e: any) => ({
+      user_id: e.user_id,
+      student_name: nameMap[e.user_id] || 'Unknown',
+      enrolled_at: e.enrolled_at,
+      progress: progressMap[e.user_id] || 0,
+    })).sort((a: EnrollmentRow, b: EnrollmentRow) => b.progress - a.progress));
+    setEnrollmentsLoading(false);
+  };
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -331,10 +358,10 @@ export default function AdminPage() {
     ]);
 
     const profileMap: Record<string, string> = Object.fromEntries((profilesData || []).map((p: any) => [p.id, p.full_name || 'Unknown']));
-    const courseMap: Record<number, { title: string; instructor: string }> = Object.fromEntries(
+    const courseMap: Record<number, { title: string; instructor: string; instructorId: string }> = Object.fromEntries(
       (coursesData || []).map((c: any) => {
         const ids: string[] = c.instructor_ids?.length ? c.instructor_ids : [c.created_by].filter(Boolean);
-        return [c.id, { title: c.title, instructor: ids.map(id => profileMap[id]).filter(Boolean).join(', ') || 'Unknown' }];
+        return [c.id, { title: c.title, instructor: ids.map((id: string) => profileMap[id]).filter(Boolean).join(', ') || 'Unknown', instructorId: c.created_by || '' }];
       })
     );
     const lessonMap: Record<number, { title: string; courseId: number; type: string; rubric: RubricCriterion[] }> = Object.fromEntries(
@@ -352,6 +379,7 @@ export default function AdminPage() {
       student_name: profileMap[s.user_id] || 'Unknown',
       course_title: courseMap[lessonMap[s.lesson_id]?.courseId]?.title || '',
       course_instructor: courseMap[lessonMap[s.lesson_id]?.courseId]?.instructor || '',
+      course_instructor_id: courseMap[lessonMap[s.lesson_id]?.courseId]?.instructorId || '',
       lesson_title: lessonMap[s.lesson_id]?.title || '',
       rubric_criteria: lessonMap[s.lesson_id]?.rubric || [],
       rubric_scores: s.rubric_scores || {},
@@ -1156,6 +1184,12 @@ export default function AdminPage() {
                         )}
                       </div>
                       <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                        <button onClick={() => viewEnrollments(course)} style={{
+                          background: 'rgba(78,143,212,0.08)', border: '1px solid rgba(78,143,212,0.2)',
+                          borderRadius: 20, padding: '6px 16px',
+                          fontSize: 12, color: '#4E8FD4', cursor: 'pointer',
+                          fontFamily: 'DM Sans, sans-serif',
+                        }}>Enrollments</button>
                         <button onClick={() => openCourse(course)} style={{
                           background: 'rgba(213,156,16,0.08)', border: '1px solid rgba(213,156,16,0.2)',
                           borderRadius: 20, padding: '6px 16px',
@@ -2320,18 +2354,74 @@ export default function AdminPage() {
                   {selectedSubmission.status === 'approved' ? 'Already approved' : 'Already returned for rework'}
                 </div>
               )}
-              <div style={{ display: 'flex', gap: 10 }}>
-                {selectedSubmission.status !== 'approved' && (
-                  <button onClick={() => gradeSubmission('approved')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: 'none', background: grading ? '#22262B' : '#4CAF7D', color: grading ? '#6B7280' : '#1A1D21', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                    {grading ? 'Saving...' : 'Approve'}
-                  </button>
-                )}
-                {selectedSubmission.status !== 'rework' && (
-                  <button onClick={() => gradeSubmission('rework')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#F87171', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                    Return for Rework
-                  </button>
-                )}
+              {selectedSubmission.course_instructor_id === adminId ? (
+                <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(213,156,16,0.08)', border: '1px solid rgba(213,156,16,0.25)', fontSize: 13, color: '#D59C10', textAlign: 'center' }}>
+                  You cannot approve or reject your own course submissions. Another admin must review this.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {selectedSubmission.status !== 'approved' && (
+                    <button onClick={() => gradeSubmission('approved')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: 'none', background: grading ? '#22262B' : '#4CAF7D', color: grading ? '#6B7280' : '#1A1D21', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                      {grading ? 'Saving...' : 'Approve'}
+                    </button>
+                  )}
+                  {selectedSubmission.status !== 'rework' && (
+                    <button onClick={() => gradeSubmission('rework')} disabled={grading} style={{ flex: 1, padding: '10px 0', borderRadius: 50, fontWeight: 700, fontSize: 14, border: '1px solid rgba(248,113,113,0.4)', background: 'transparent', color: '#F87171', cursor: grading ? 'not-allowed' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                      Return for Rework
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enrollments modal */}
+      {enrollmentsCourse && (
+        <div onClick={e => { if (e.target === e.currentTarget) setEnrollmentsCourse(null); }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#1A1D21', border: '1px solid #2A2F35', borderRadius: 20, width: '100%', maxWidth: 680, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #2A2F35', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#4E8FD4', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Enrollments</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#F5F5F5' }}>{enrollmentsCourse.title}</div>
               </div>
+              <button onClick={() => setEnrollmentsCourse(null)} style={{ background: 'none', border: 'none', color: '#6B7280', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>x</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+              {enrollmentsLoading ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#6B7280', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>Loading...</div>
+              ) : enrollmentsData.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#3A3F46', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>No students enrolled yet</div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 16 }}>{enrollmentsData.length} student{enrollmentsData.length !== 1 ? 's' : ''} enrolled</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {enrollmentsData.map(row => (
+                      <div key={row.user_id} style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 12, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(78,143,212,0.12)', border: '1px solid rgba(78,143,212,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, color: '#4E8FD4', flexShrink: 0 }}>
+                          {row.student_name.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: '#F5F5F5', marginBottom: 2 }}>{row.student_name}</div>
+                          <div style={{ fontSize: 11, color: '#6B7280', fontFamily: 'JetBrains Mono, monospace' }}>
+                            Enrolled {new Date(row.enrolled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: row.progress >= 100 ? '#4CAF7D' : row.progress > 0 ? '#D59C10' : '#6B7280', marginBottom: 4 }}>{row.progress}%</div>
+                          <div style={{ width: 80, height: 4, background: '#2A2F35', borderRadius: 10, overflow: 'hidden' }}>
+                            <div style={{ width: `${row.progress}%`, height: '100%', background: row.progress >= 100 ? '#4CAF7D' : '#D59C10', borderRadius: 10, transition: 'width 0.4s' }} />
+                          </div>
+                          <div style={{ fontSize: 10, color: '#6B7280', marginTop: 3, fontFamily: 'JetBrains Mono, monospace' }}>
+                            {row.progress >= 100 ? 'Completed' : row.progress > 0 ? 'In Progress' : 'Not Started'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
