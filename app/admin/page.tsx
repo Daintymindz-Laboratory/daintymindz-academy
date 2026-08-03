@@ -837,6 +837,16 @@ export default function AdminPage() {
     showToast('Course restored.');
   };
 
+  const deleteCourse = async (id: number, title: string) => {
+    if (!confirm(`Permanently delete "${title}"? This cannot be undone. All lessons, enrollments, and progress for this course will be removed.`)) return;
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    const { error } = await supabase.from('courses').delete().eq('id', id);
+    if (error) { showToast(`Could not delete course: ${error.message}`); return; }
+    await loadCourses(supabase);
+    showToast('Course permanently deleted.');
+  };
+
   const loadLessons = async (courseId: number) => {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
@@ -1241,11 +1251,18 @@ export default function AdminPage() {
                             Archived {course.archived_at ? new Date(course.archived_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
                           </div>
                         </div>
-                        <button onClick={() => restoreCourse(course.id!)} style={{
-                          background: 'rgba(76,175,125,0.08)', border: '1px solid rgba(76,175,125,0.25)',
-                          borderRadius: 20, padding: '6px 16px', color: '#4CAF7D',
-                          fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-                        }}>Restore</button>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={() => restoreCourse(course.id!)} style={{
+                            background: 'rgba(76,175,125,0.08)', border: '1px solid rgba(76,175,125,0.25)',
+                            borderRadius: 20, padding: '6px 16px', color: '#4CAF7D',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                          }}>Restore</button>
+                          <button onClick={() => deleteCourse(course.id!, course.title)} style={{
+                            background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)',
+                            borderRadius: 20, padding: '6px 16px', color: '#F87171',
+                            fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                          }}>Delete</button>
+                        </div>
                       </div>
                     ))}
                   </div>
