@@ -18,17 +18,26 @@ export default function CourseRating({
   const [hovered, setHovered] = useState(0);
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const submit = async () => {
     if (rating === 0) return;
     setSaving(true);
-    const { createClient } = await import('@/lib/supabase');
-    const supabase = createClient();
-    await supabase.from('course_ratings').upsert(
-      { course_id: courseId, user_id: userId, rating, comment: comment.trim() || null },
-      { onConflict: 'course_id,user_id' }
-    );
-    onDone();
+    setSaveError('');
+    try {
+      const { createClient } = await import('@/lib/supabase');
+      const supabase = createClient();
+      const { error } = await supabase.from('course_ratings').upsert(
+        { course_id: courseId, user_id: userId, rating, comment: comment.trim() || null },
+        { onConflict: 'course_id,user_id' }
+      );
+      if (error) { setSaveError('Could not save rating. Please try again.'); return; }
+      onDone();
+    } catch {
+      setSaveError('Could not save rating. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const labels = ['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'];
@@ -88,6 +97,11 @@ export default function CourseRating({
           }}
         />
 
+        {saveError && (
+          <div style={{ fontSize: 12, color: '#F87171', marginBottom: 12, padding: '8px 12px', background: 'rgba(248,113,113,0.08)', borderRadius: 8, border: '1px solid rgba(248,113,113,0.2)' }}>
+            {saveError}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 10 }}>
           <button
             onClick={onDone}

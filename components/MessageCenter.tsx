@@ -72,9 +72,10 @@ export default function MessageCenter({ userId, isAdmin, trackColor, instructorI
   }, [userId]);
 
   useEffect(() => {
+    if (!selectedKey) return;
     const selected = contacts.find(contact => contact.key === selectedKey) || admins.find(option => `${option.id}:${option.courseId}` === selectedKey);
     if (selected) loadThread(selected.id, 'courseId' in selected ? selected.courseId : null);
-  }, [selectedKey]);
+  }, [selectedKey, contacts, admins]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

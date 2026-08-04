@@ -81,7 +81,11 @@ export default function MiniProjectLesson({
         supabase.from('lesson_submissions').select('*').eq('lesson_id', lessonId).eq('user_id', userId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       setTestCases(tcData || []);
-      if (subData) setSubmission({ ...subData, status: subData.status === 'rejected' ? 'rework' : subData.status, submitted_at: subData.created_at });
+      if (subData) {
+        const mappedStatus = subData.status === 'rejected' ? 'rework' : subData.status;
+        setSubmission({ ...subData, status: mappedStatus, submitted_at: subData.created_at });
+        if (mappedStatus === 'approved' && !isCompleted) onComplete();
+      }
       if (resultData?.submitted_code) {
         setCode(resultData.submitted_code);
         try { localStorage.setItem(storageKey, resultData.submitted_code); } catch { /* ignore */ }

@@ -433,10 +433,24 @@ export default function AdminPage() {
       .eq('id', selectedSubmission.id);
     if (error) { showToast(`Error: ${error.message}`); setGrading(false); return; }
     if (status === 'approved') {
-      await supabase.from('progress').upsert(
-        { user_id: selectedSubmission.user_id, course_id: selectedSubmission.course_id, lesson_id: selectedSubmission.lesson_id, completed: true },
-        { onConflict: 'user_id,course_id' }
-      );
+      const { data: progRow } = await supabase
+        .from('progress').select('completed_lessons, percentage')
+        .eq('user_id', selectedSubmission.user_id)
+        .eq('course_id', selectedSubmission.course_id)
+        .maybeSingle();
+      const existing: number[] = (progRow?.completed_lessons || []).map(Number);
+      const lessonIdNum = Number(selectedSubmission.lesson_id);
+      const newCompleted = existing.includes(lessonIdNum) ? existing : [...existing, lessonIdNum];
+      const { data: courseLessons } = await supabase
+        .from('lessons').select('id').eq('course_id', selectedSubmission.course_id).eq('is_published', true);
+      const totalLessons = (courseLessons || []).length || 1;
+      const percentage = Math.round((newCompleted.length / totalLessons) * 100);
+      if (progRow) {
+        await supabase.from('progress').update({ completed_lessons: newCompleted, percentage, last_accessed: new Date().toISOString() })
+          .eq('user_id', selectedSubmission.user_id).eq('course_id', selectedSubmission.course_id);
+      } else {
+        await supabase.from('progress').insert({ user_id: selectedSubmission.user_id, course_id: selectedSubmission.course_id, completed_lessons: newCompleted, percentage });
+      }
     }
     if (status === 'approved') {
       notify({ userId: selectedSubmission.user_id, type: 'submission_approved', title: 'Submission approved!', message: `Your project for "${selectedSubmission.lesson_title}" has been approved. Great work!`, link: `/lesson/${selectedSubmission.course_id}/${selectedSubmission.lesson_id}` });
