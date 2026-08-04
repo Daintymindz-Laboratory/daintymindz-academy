@@ -121,7 +121,7 @@ function CourseCard({ course, tracks, recommended = false, onEnroll }: { course:
       <button
         onClick={async () => {
           if (enrolled) {
-            window.location.href = `/lesson/${course.id}/1`;
+            window.location.href = `/lesson/${course.id}/${course.resumeLessonId || 'start'}`;
           } else {
             if (course.requires_enrollment_approval && requestStatus === 'pending') return;
             const { createClient } = await import('@/lib/supabase');
