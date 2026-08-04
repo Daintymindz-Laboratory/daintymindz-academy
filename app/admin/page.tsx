@@ -84,6 +84,7 @@ type Submission = {
   course_title: string;
   course_instructor: string;
   course_instructor_id: string;
+  course_instructor_ids: string[];
   lesson_title: string;
   rubric_criteria: RubricCriterion[];
   rubric_scores: Record<string, number>;
@@ -234,22 +235,27 @@ export default function AdminPage() {
   const viewEnrollments = async (course: Course) => {
     setEnrollmentsCourse(course);
     setEnrollmentsLoading(true);
-    const { createClient } = await import('@/lib/supabase');
-    const supabase = createClient();
-    const [{ data: enrollData }, { data: progressData }, { data: profilesData }] = await Promise.all([
-      supabase.from('enrollments').select('user_id, enrolled_at').eq('course_id', course.id),
-      supabase.from('progress').select('user_id, percentage').eq('course_id', course.id),
-      supabase.from('profiles').select('id, full_name'),
-    ]);
-    const nameMap: Record<string, string> = Object.fromEntries((profilesData || []).map((p: any) => [p.id, p.full_name || 'Unknown']));
-    const progressMap: Record<string, number> = Object.fromEntries((progressData || []).map((p: any) => [p.user_id, p.percentage || 0]));
-    setEnrollmentsData((enrollData || []).map((e: any) => ({
-      user_id: e.user_id,
-      student_name: nameMap[e.user_id] || 'Unknown',
-      enrolled_at: e.enrolled_at,
-      progress: progressMap[e.user_id] || 0,
-    })).sort((a: EnrollmentRow, b: EnrollmentRow) => b.progress - a.progress));
-    setEnrollmentsLoading(false);
+    try {
+      const { createClient } = await import('@/lib/supabase');
+      const supabase = createClient();
+      const [{ data: enrollData }, { data: progressData }, { data: profilesData }] = await Promise.all([
+        supabase.from('enrollments').select('user_id, enrolled_at').eq('course_id', course.id),
+        supabase.from('progress').select('user_id, percentage').eq('course_id', course.id),
+        supabase.from('profiles').select('id, full_name'),
+      ]);
+      const nameMap: Record<string, string> = Object.fromEntries((profilesData || []).map((p: any) => [p.id, p.full_name || 'Unknown']));
+      const progressMap: Record<string, number> = Object.fromEntries((progressData || []).map((p: any) => [p.user_id, p.percentage || 0]));
+      setEnrollmentsData((enrollData || []).map((e: any) => ({
+        user_id: e.user_id,
+        student_name: nameMap[e.user_id] || 'Unknown',
+        enrolled_at: e.enrolled_at,
+        progress: progressMap[e.user_id] || 0,
+      })).sort((a: EnrollmentRow, b: EnrollmentRow) => b.progress - a.progress));
+    } catch {
+      showToast('Could not load enrollments.');
+    } finally {
+      setEnrollmentsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -360,10 +366,10 @@ export default function AdminPage() {
     ]);
 
     const profileMap: Record<string, string> = Object.fromEntries((profilesData || []).map((p: any) => [p.id, p.full_name || 'Unknown']));
-    const courseMap: Record<number, { title: string; instructor: string; instructorId: string }> = Object.fromEntries(
+    const courseMap: Record<number, { title: string; instructor: string; instructorId: string; instructorIds: string[] }> = Object.fromEntries(
       (coursesData || []).map((c: any) => {
         const ids: string[] = c.instructor_ids?.length ? c.instructor_ids : [c.created_by].filter(Boolean);
-        return [c.id, { title: c.title, instructor: ids.map((id: string) => profileMap[id]).filter(Boolean).join(', ') || 'Unknown', instructorId: c.created_by || '' }];
+        return [c.id, { title: c.title, instructor: ids.map((id: string) => profileMap[id]).filter(Boolean).join(', ') || 'Unknown', instructorId: c.created_by || '', instructorIds: (c.instructor_ids || []) as string[] }];
       })
     );
     const lessonMap: Record<number, { title: string; courseId: number; type: string; rubric: RubricCriterion[] }> = Object.fromEntries(
@@ -382,6 +388,7 @@ export default function AdminPage() {
       course_title: courseMap[lessonMap[s.lesson_id]?.courseId]?.title || '',
       course_instructor: courseMap[lessonMap[s.lesson_id]?.courseId]?.instructor || '',
       course_instructor_id: courseMap[lessonMap[s.lesson_id]?.courseId]?.instructorId || '',
+      course_instructor_ids: courseMap[lessonMap[s.lesson_id]?.courseId]?.instructorIds || [],
       lesson_title: lessonMap[s.lesson_id]?.title || '',
       rubric_criteria: lessonMap[s.lesson_id]?.rubric || [],
       rubric_scores: s.rubric_scores || {},
@@ -2486,7 +2493,7 @@ export default function AdminPage() {
                   {selectedSubmission.status === 'approved' ? 'Already approved' : 'Already returned for rework'}
                 </div>
               )}
-              {selectedSubmission.course_instructor_id === adminId ? (
+              {(selectedSubmission.course_instructor_id === adminId || selectedSubmission.course_instructor_ids.includes(adminId)) ? (
                 <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(213,156,16,0.08)', border: '1px solid rgba(213,156,16,0.25)', fontSize: 13, color: '#D59C10', textAlign: 'center' }}>
                   You cannot approve or reject your own course submissions. Another admin must review this.
                 </div>
@@ -2561,7 +2568,7 @@ export default function AdminPage() {
 
       {/* Messages tab content -- rendered inline in main, shown via activeTab */}
       {activeTab === 'messages' && adminId && (
-        <div style={{ position: 'fixed', inset: 0, top: 56, left: 240, padding: '2rem', background: '#1A1D21', zIndex: 10, overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', inset: 0, top: 56, left: sidebarCollapsed ? 64 : 240, padding: '2rem', background: '#1A1D21', zIndex: 10, overflowY: 'auto' }}>
           <div style={{ marginBottom: '1.5rem' }}>
             <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// messages'}</div>
             <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5' }}>Messages</h1>
