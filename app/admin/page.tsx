@@ -2029,26 +2029,35 @@ export default function AdminPage() {
                     {/* Bar chart: top enrolled courses */}
                     <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
                       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 18 }}>Enrollments by Course</div>
-                      <div style={{ overflowX: 'auto' }}>
-                        <svg width={Math.max(svgW, 400)} height={chartH + 48} style={{ display: 'block' }}>
-                          {analytics.enrollmentsByCourse.map((c, i) => {
-                            const tColor = tracksMap[c.track]?.color || '#D59C10';
-                            const barH = Math.max(4, Math.round((c.count / barMax) * chartH));
-                            const x = barGap + i * (barW + barGap);
-                            const y = chartH - barH;
-                            return (
-                              <g key={i}>
-                                <rect x={x} y={chartH} width={barW} height={0} fill={tColor} rx={5} opacity={0.15} />
-                                <rect x={x} y={y} width={barW} height={barH} fill={tColor} rx={5} opacity={0.85} />
-                                <text x={x + barW / 2} y={y - 6} textAnchor="middle" fill={tColor} fontSize={11} fontFamily="JetBrains Mono, monospace">{c.count}</text>
-                                <text x={x + barW / 2} y={chartH + 16} textAnchor="middle" fill="#6B7280" fontSize={9} fontFamily="JetBrains Mono, monospace">
-                                  {c.title.length > 10 ? c.title.slice(0, 10) + '..' : c.title}
-                                </text>
-                              </g>
-                            );
-                          })}
-                          <line x1={0} y1={chartH} x2={Math.max(svgW, 400)} y2={chartH} stroke="#2A2F35" strokeWidth={1} />
-                        </svg>
+                      <svg width="100%" viewBox={`0 0 ${Math.max(svgW, 400)} ${chartH + 24}`} style={{ display: 'block', overflow: 'visible' }}>
+                        {analytics.enrollmentsByCourse.map((c, i) => {
+                          const tColor = tracksMap[c.track]?.color || '#D59C10';
+                          const barH = Math.max(4, Math.round((c.count / barMax) * chartH));
+                          const x = barGap + i * (barW + barGap);
+                          const y = chartH - barH;
+                          const cx = x + barW / 2;
+                          return (
+                            <g key={i}>
+                              <rect x={x} y={y} width={barW} height={barH} fill={tColor} rx={6} opacity={0.85} />
+                              <text x={cx} y={y - 7} textAnchor="middle" fill={tColor} fontSize={12} fontFamily="JetBrains Mono, monospace" fontWeight={700}>{c.count}</text>
+                              <text x={cx} y={chartH + 16} textAnchor="middle" fill="#6B7280" fontSize={11} fontFamily="JetBrains Mono, monospace" fontWeight={700}>{i + 1}</text>
+                            </g>
+                          );
+                        })}
+                        <line x1={0} y1={chartH} x2={Math.max(svgW, 400)} y2={chartH} stroke="#2A2F35" strokeWidth={1} />
+                      </svg>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 16, borderTop: '1px solid #2A2F35', paddingTop: 14 }}>
+                        {analytics.enrollmentsByCourse.map((c, i) => {
+                          const tColor = tracksMap[c.track]?.color || '#D59C10';
+                          return (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#6B7280', width: 14, flexShrink: 0 }}>{i + 1}</span>
+                              <div style={{ width: 8, height: 8, borderRadius: '50%', background: tColor, flexShrink: 0 }} />
+                              <span style={{ fontSize: 13, color: '#D1D5DB', flex: 1 }}>{c.title}</span>
+                              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: tColor }}>{c.count}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
 
