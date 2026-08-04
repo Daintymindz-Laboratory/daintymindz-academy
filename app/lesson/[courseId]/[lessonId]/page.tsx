@@ -74,6 +74,7 @@ export default function LessonPage() {
   const [loading, setLoading] = useState(true);
   const { tracks, setUser } = useUser();
   const [showRating, setShowRating] = useState(false);
+  const [showCompletion, setShowCompletion] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('dm-sidebar-collapsed') === '1';
@@ -223,9 +224,9 @@ export default function LessonPage() {
         await supabase.from('certificates').insert({ user_id: userId, course_id: parseInt(courseId), cert_id: certId });
         notify({ userId, type: 'course_completed', title: 'Course completed!', message: `Congratulations! You completed "${course?.title}" and earned a certificate.`, link: '/certificates' });
         notify({ courseAdmins: true, courseId: Number(courseId), excludeUserId: userId, type: 'course_completed', title: 'Student completed a course', message: `A student completed "${course?.title}" and earned a certificate.`, link: '/admin' });
-        setShowRating(true);
+        setShowCompletion(true);
       } else {
-        window.location.href = '/certificates';
+        setShowCompletion(true);
       }
     } else {
       // Gated lesson types (quiz, mini_project) stay on the current lesson
@@ -467,6 +468,53 @@ export default function LessonPage() {
               color: '#E5E7EB', lineHeight: 1.7, resize: 'none',
             }}
           />
+        </div>
+      )}
+
+      {showCompletion && !showRating && course && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(10,12,15,0.92)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '2rem',
+        }}>
+          <div style={{
+            background: '#1A1D21', border: `1px solid ${trackColor}40`,
+            borderRadius: 24, padding: '3rem 2.5rem', maxWidth: 480, width: '100%',
+            textAlign: 'center', boxShadow: `0 0 80px ${trackColor}20`,
+          }}>
+            <div style={{ fontSize: 56, marginBottom: 20 }}>🎉</div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: trackColor, letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 12 }}>Course Complete</div>
+            <h2 style={{ fontSize: 26, fontWeight: 800, color: '#F5F5F5', letterSpacing: '-0.02em', marginBottom: 12, lineHeight: 1.3 }}>
+              Congratulations!
+            </h2>
+            <p style={{ fontSize: 15, color: '#9CA3AF', lineHeight: 1.7, marginBottom: 8 }}>
+              You have completed <span style={{ color: '#F5F5F5', fontWeight: 600 }}>{course.title}</span>.
+            </p>
+            <p style={{ fontSize: 14, color: '#6B7280', lineHeight: 1.6, marginBottom: 28 }}>
+              Your certificate has been issued. Before you go, take a moment to rate this course -- your feedback helps improve it for future learners.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button
+                onClick={() => { setShowCompletion(false); setShowRating(true); }}
+                style={{
+                  padding: '13px 28px', borderRadius: 50, border: 'none',
+                  background: trackColor, color: '#1A1D21',
+                  fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                  fontFamily: 'DM Sans, sans-serif',
+                }}
+              >Rate this course</button>
+              <button
+                onClick={() => { setShowCompletion(false); window.location.href = '/certificates'; }}
+                style={{
+                  padding: '12px 28px', borderRadius: 50,
+                  background: 'transparent', border: '1px solid #3A3F46',
+                  color: '#9CA3AF', fontSize: 14, cursor: 'pointer',
+                  fontFamily: 'DM Sans, sans-serif',
+                }}
+              >View my certificate</button>
+            </div>
+          </div>
         </div>
       )}
 
