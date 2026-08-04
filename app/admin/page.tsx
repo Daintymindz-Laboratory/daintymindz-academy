@@ -2000,9 +2000,9 @@ export default function AdminPage() {
               </div>
               {analytics ? (() => {
                 const barMax = analytics.enrollmentsByCourse[0]?.count || 1;
-                const chartH = 140;
-                const barW = 36;
-                const barGap = 14;
+                const chartH = 100;
+                const barW = 28;
+                const barGap = 10;
                 const barCount = analytics.enrollmentsByCourse.length;
                 const svgW = barCount * (barW + barGap) + barGap;
 
@@ -2043,7 +2043,7 @@ export default function AdminPage() {
                     {/* Bar chart: top enrolled courses */}
                     <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
                       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 18 }}>Enrollments by Course</div>
-                      <svg width="100%" viewBox={`0 0 ${Math.max(svgW, 400)} ${chartH + 24}`} style={{ display: 'block', overflow: 'visible' }}>
+                      <svg width={Math.max(svgW, 360)} height={chartH + 28} style={{ display: 'block', maxWidth: '100%' }}>
                         {analytics.enrollmentsByCourse.map((c, i) => {
                           const tColor = tracksMap[c.track]?.color || '#D59C10';
                           const barH = Math.max(4, Math.round((c.count / barMax) * chartH));
@@ -2058,7 +2058,7 @@ export default function AdminPage() {
                             </g>
                           );
                         })}
-                        <line x1={0} y1={chartH} x2={Math.max(svgW, 400)} y2={chartH} stroke="#2A2F35" strokeWidth={1} />
+                        <line x1={0} y1={chartH} x2={Math.max(svgW, 360)} y2={chartH} stroke="#2A2F35" strokeWidth={1} />
                       </svg>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 16, borderTop: '1px solid #2A2F35', paddingTop: 14 }}>
                         {analytics.enrollmentsByCourse.map((c, i) => {
