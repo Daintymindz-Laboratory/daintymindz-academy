@@ -211,7 +211,7 @@ export async function runTestCases(
   const results: TestResult[] = [];
   for (const tc of testCases) {
     const fullCode = tc.test_code?.trim()
-      ? `${studentCode}\n\n${tc.test_code}`
+      ? composeTestCode(`${studentCode}\n\n${tc.test_code}`, tc.description, language)
       : composeTestCode(studentCode, tc.description, language);
     const runId = nextRunId();
     const { output, error } = await runOneTest(worker, fullCode, runId, timeoutMs);

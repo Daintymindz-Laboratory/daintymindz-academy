@@ -226,7 +226,7 @@ export default function LessonPage() {
         notify({ courseAdmins: true, courseId: Number(courseId), excludeUserId: userId, type: 'course_completed', title: 'Student completed a course', message: `A student completed "${course?.title}" and earned a certificate.`, link: '/admin' });
         setShowCompletion(true);
       } else {
-        setShowCompletion(true);
+        window.location.href = '/certificates';
       }
     } else {
       // Gated lesson types (quiz, mini_project) stay on the current lesson

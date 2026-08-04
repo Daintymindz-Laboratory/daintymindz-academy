@@ -2516,9 +2516,11 @@ export default function AdminPage() {
                   {selectedSubmission.status === 'approved' ? 'Already approved' : 'Already returned for rework'}
                 </div>
               )}
-              {(selectedSubmission.course_instructor_id === adminId || selectedSubmission.course_instructor_ids.includes(adminId)) ? (
+              {(selectedSubmission.course_instructor_id === adminId || selectedSubmission.course_instructor_ids.includes(adminId) || selectedSubmission.user_id === adminId) ? (
                 <div style={{ padding: '12px 16px', borderRadius: 10, background: 'rgba(213,156,16,0.08)', border: '1px solid rgba(213,156,16,0.25)', fontSize: 13, color: '#D59C10', textAlign: 'center' }}>
-                  You cannot approve or reject your own course submissions. Another admin must review this.
+                  {selectedSubmission.user_id === adminId
+                    ? 'You cannot approve your own submission.'
+                    : 'You cannot approve or reject your own course submissions. Another admin must review this.'}
                 </div>
               ) : (
                 <div style={{ display: 'flex', gap: 10 }}>

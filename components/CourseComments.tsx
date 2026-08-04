@@ -99,7 +99,8 @@ export default function CourseComments({ courseId, userId, trackColor }: { cours
     try {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
-      await supabase.from('course_comments').update({ content: editText.trim() }).eq('id', id);
+      const { error } = await supabase.from('course_comments').update({ content: editText.trim() }).eq('id', id);
+      if (error) { setPostError('Could not save edit. Please try again.'); return; }
       setEditingId(null);
       setEditText('');
       await load();
