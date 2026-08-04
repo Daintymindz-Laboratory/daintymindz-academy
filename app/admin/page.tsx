@@ -2043,7 +2043,7 @@ export default function AdminPage() {
                     {/* Bar chart: top enrolled courses */}
                     <div style={{ background: '#22262B', border: '1px solid #2A2F35', borderRadius: 16, padding: '20px 24px' }}>
                       <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 18 }}>Enrollments by Course</div>
-                      <svg width={Math.max(svgW, 360)} height={chartH + 28} style={{ display: 'block', maxWidth: '100%' }}>
+                      <svg viewBox={`0 0 ${Math.max(svgW, 360)} ${chartH + 28}`} width={Math.max(svgW, 360)} height={chartH + 28} style={{ display: 'block', maxWidth: '100%', height: 'auto' }}>
                         {analytics.enrollmentsByCourse.map((c, i) => {
                           const tColor = tracksMap[c.track]?.color || '#D59C10';
                           const barH = Math.max(4, Math.round((c.count / barMax) * chartH));
