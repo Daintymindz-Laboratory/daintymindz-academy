@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createServiceClient } from '@/lib/supabase-server';
+import { createServiceClient, createAnonServerClient } from '@/lib/supabase-server';
 import { Resend } from 'resend';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -33,32 +33,43 @@ async function sendEmail(to: string, subject: string, message: string, link?: st
   }
 }
 
+async function getEmailForUser(serviceClient: ReturnType<typeof createServiceClient>, userId: string): Promise<string | null> {
+  try {
+    const { data } = await serviceClient.auth.admin.getUserById(userId);
+    return data?.user?.email ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { userId, adminBroadcast, courseAdmins, courseId, emailOnly, excludeUserId, type, title, message, link } = await req.json();
-    const supabase = createServiceClient();
+    const db = createAnonServerClient();
+    const serviceClient = createServiceClient();
 
     if (adminBroadcast || (courseAdmins && courseId)) {
       let recipientIds: string[] = [];
       if (courseAdmins && courseId) {
-        const { data: course } = await supabase.from('courses').select('created_by,instructor_ids').eq('id', courseId).single();
+        const { data: course, error: courseErr } = await db.from('courses').select('created_by,instructor_ids').eq('id', courseId).single();
+        if (courseErr) console.error('notify: course lookup failed', courseErr.message);
         recipientIds = [...new Set([
           course?.created_by,
           ...(Array.isArray(course?.instructor_ids) ? course.instructor_ids : []),
         ].filter(Boolean))] as string[];
       } else {
-        const { data: admins } = await supabase.from('profiles').select('id').eq('is_admin', true);
-        recipientIds = (admins || []).map(admin => admin.id);
+        const { data: admins } = await serviceClient.from('profiles').select('id').eq('is_admin', true);
+        recipientIds = (admins || []).map((admin: { id: string }) => admin.id);
       }
       for (const recipientId of recipientIds.filter(id => id !== excludeUserId)) {
-        if (!emailOnly) await supabase.from('notifications').insert({ user_id: recipientId, type, title, message, link });
-        const { data: { user } } = await supabase.auth.admin.getUserById(recipientId);
-        if (user?.email) await sendEmail(user.email, title, message, link);
+        if (!emailOnly) await db.from('notifications').insert({ user_id: recipientId, type, title, message, link });
+        const email = await getEmailForUser(serviceClient, recipientId);
+        if (email) await sendEmail(email, title, message, link);
       }
     } else if (userId) {
-      if (!emailOnly) await supabase.from('notifications').insert({ user_id: userId, type, title, message, link });
-      const { data: { user } } = await supabase.auth.admin.getUserById(userId);
-      if (user?.email) await sendEmail(user.email, title, message, link);
+      if (!emailOnly) await db.from('notifications').insert({ user_id: userId, type, title, message, link });
+      const email = await getEmailForUser(serviceClient, userId);
+      if (email) await sendEmail(email, title, message, link);
     }
 
     return Response.json({ ok: true });
