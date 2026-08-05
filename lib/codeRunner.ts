@@ -210,9 +210,12 @@ export async function runTestCases(
 ): Promise<TestResult[]> {
   const results: TestResult[] = [];
   for (const tc of testCases) {
-    const fullCode = tc.test_code?.trim()
-      ? composeTestCode(studentCode, tc.description, language) + '\n\n' + tc.test_code
-      : composeTestCode(studentCode, tc.description, language);
+    const desc = tc.description.trim();
+    const isVarAssignment = !(/^[[{]/.test(desc)) && !(/^[A-Za-z_]\w*\s*\(/.test(desc));
+    const composedCode = composeTestCode(studentCode, tc.description, language);
+    const fullCode = tc.test_code?.trim() && !isVarAssignment
+      ? composedCode + '\n\n' + tc.test_code
+      : composedCode;
     const runId = nextRunId();
     const { output, error } = await runOneTest(worker, fullCode, runId, timeoutMs);
     if (error !== undefined) {
