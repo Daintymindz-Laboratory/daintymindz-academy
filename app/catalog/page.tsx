@@ -364,6 +364,8 @@ export default function Catalog() {
                       if (isEnrolled) {
                         const lessonId = resumeMap[course.id] || '1';
                         window.location.href = `/lesson/${course.id}/${lessonId}`;
+                      } else if (course.requires_enrollment_approval && requestStatus === 'approved') {
+                        enrollInCourse(course.id);
                       } else {
                         course.requires_enrollment_approval ? requestCourseAccess(course) : enrollInCourse(course.id);
                       }
@@ -375,7 +377,7 @@ export default function Catalog() {
                       fontSize: 13, fontWeight: 700, cursor: 'pointer',
                       fontFamily: 'DM Sans, sans-serif', transition: 'all 0.2s',
                     }}>
-                      {isEnrolled ? 'Go to course' : course.requires_enrollment_approval ? requestStatus === 'pending' ? 'Access requested' : requestStatus === 'rejected' ? 'Request access again' : 'Request access' : 'Enroll'}
+                      {isEnrolled ? 'Go to course' : course.requires_enrollment_approval ? requestStatus === 'pending' ? 'Access requested' : requestStatus === 'approved' ? 'Enroll now' : requestStatus === 'rejected' ? 'Request access again' : 'Request access' : 'Enroll'}
                     </button>
                   </div>
                 );

@@ -128,7 +128,12 @@ function CourseCard({ course, tracks, recommended = false, onEnroll }: { course:
             const supabase = createClient();
             const { data: { user } } = await supabase.auth.getUser();
             if (user) {
-              if (course.requires_enrollment_approval) {
+              if (course.requires_enrollment_approval && requestStatus === 'approved') {
+                const { error } = await supabase.from('enrollments').insert({ user_id: user.id, course_id: course.id });
+                if (error) { window.alert(error.message); return; }
+                setEnrolled(true);
+                if (onEnroll) onEnroll(course.id);
+              } else if (course.requires_enrollment_approval) {
                 const { error } = await supabase.from('course_enrollment_requests').upsert({ user_id: user.id, course_id: course.id, status: 'pending', updated_at: new Date().toISOString() }, { onConflict: 'course_id,user_id' });
                 if (error) { window.alert(error.message); return; }
                 setRequestStatus('pending');
@@ -151,7 +156,7 @@ function CourseCard({ course, tracks, recommended = false, onEnroll }: { course:
           transition: 'all 0.2s',
         }}
       >
-        {enrolled ? (course.progress > 0 ? 'Continue learning' : 'Start course') : course.requires_enrollment_approval ? requestStatus === 'pending' ? 'Access requested' : requestStatus === 'rejected' ? 'Request access again' : 'Request access' : 'Enroll'}
+        {enrolled ? (course.progress > 0 ? 'Continue learning' : 'Start course') : course.requires_enrollment_approval ? requestStatus === 'pending' ? 'Access requested' : requestStatus === 'approved' ? 'Enroll now' : requestStatus === 'rejected' ? 'Request access again' : 'Request access' : 'Enroll'}
       </button>
     </div>
   );
