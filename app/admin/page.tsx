@@ -6,6 +6,8 @@ import { FALLBACK_TRACKS as BASE_FALLBACK_TRACKS } from '@/lib/user-context';
 import { notify } from '@/lib/notify';
 import NotificationBell from '@/components/NotificationBell';
 import MessageCenter from '@/components/MessageCenter';
+import CourseImportModal from '@/components/CourseImportModal';
+import { exportCourseBundle, bundleFileName, downloadJson } from '@/lib/courseImport';
 
 const MDEditor = dynamic(() => import('@uiw/react-md-editor'), { ssr: false });
 
@@ -173,6 +175,7 @@ export default function AdminPage() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<StudentDetail | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course>(EMPTY_COURSE);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
@@ -914,6 +917,18 @@ export default function AdminPage() {
     showToast('Course permanently deleted.');
   };
 
+  const exportCourse = async (course: Course) => {
+    const { createClient } = await import('@/lib/supabase');
+    const supabase = createClient();
+    try {
+      const bundle = await exportCourseBundle(supabase, course.id!);
+      downloadJson(bundle, bundleFileName(course.title));
+      showToast('Course bundle downloaded.');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   const loadLessons = async (courseId: number) => {
     const { createClient } = await import('@/lib/supabase');
     const supabase = createClient();
@@ -1122,11 +1137,18 @@ export default function AdminPage() {
                   <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: '#D59C10', letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 6 }}>{'// course manager'}</div>
                   <h1 style={{ fontSize: 24, fontWeight: 700, color: '#F5F5F5', letterSpacing: '-0.02em' }}>Courses</h1>
                 </div>
-                <button onClick={() => { setEditingCourse(EMPTY_COURSE); setShowForm(true); }} style={{
-                  background: '#D59C10', border: 'none', borderRadius: 50,
-                  padding: '10px 24px', fontSize: 14, fontWeight: 700,
-                  color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
-                }}>+ New Course</button>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => setShowImport(true)} title="Create a whole course from a JSON bundle" style={{
+                    background: 'transparent', border: '1px solid #3A3F46', borderRadius: 50,
+                    padding: '10px 22px', fontSize: 14, fontWeight: 600,
+                    color: '#F5F5F5', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                  }}>Import course</button>
+                  <button onClick={() => { setEditingCourse(EMPTY_COURSE); setShowForm(true); }} style={{
+                    background: '#D59C10', border: 'none', borderRadius: 50,
+                    padding: '10px 24px', fontSize: 14, fontWeight: 700,
+                    color: '#1A1D21', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif',
+                  }}>+ New Course</button>
+                </div>
               </div>
 
               {showForm && (
@@ -1280,6 +1302,12 @@ export default function AdminPage() {
                           fontSize: 12, color: '#D59C10', cursor: 'pointer',
                           fontFamily: 'DM Sans, sans-serif',
                         }}>Lessons</button>
+                        <button onClick={() => exportCourse(course)} title="Download this course as a JSON bundle" style={{
+                          background: 'transparent', border: '1px solid #3A3F46',
+                          borderRadius: 20, padding: '6px 16px',
+                          fontSize: 12, color: '#9CA3AF', cursor: 'pointer',
+                          fontFamily: 'DM Sans, sans-serif',
+                        }}>Export</button>
                         <button onClick={() => {
                           setEditingCourse(course);
                           setShowForm(true);
@@ -2722,6 +2750,21 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showImport && (
+        <CourseImportModal
+          trackCodes={tracks.map(track => track.code)}
+          courses={courses}
+          adminProfiles={adminProfiles}
+          currentAdminId={adminId}
+          onClose={() => setShowImport(false)}
+          onImported={async result => {
+            const { createClient } = await import('@/lib/supabase');
+            await loadCourses(createClient());
+            showToast(`Imported ${result.lessons} lesson${result.lessons === 1 ? '' : 's'} into "${result.courseTitle}".`);
+          }}
+        />
       )}
 
       {/* Toast */}

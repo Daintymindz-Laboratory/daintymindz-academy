@@ -1,0 +1,224 @@
+{
+  "format": "daintymindz-course",
+  "version": 1,
+  "course": {
+    "title": "Field Data Hygiene",
+    "track": "DO",
+    "level": "Beginner",
+    "duration": "2h 30m",
+    "description": "How a field capture becomes a trustworthy record: naming, metadata, validation, and the two quality gates every batch must clear.",
+    "lessons_count": 6,
+    "requires_enrollment_approval": false
+  },
+  "lessons": [
+    {
+      "title": "Why file naming is a data contract",
+      "type": "lesson",
+      "content": "# Why file naming is a data contract\n\nA capture nobody can trace back to a produce item, a session, and a device is not data, it is a picture.\n\n## The parts of a name\n\n- **produce code** identifies what was captured\n- **session id** groups everything captured in one sitting\n- **sequence** keeps ordering stable inside a session\n\nRun the cell below to see a name assembled from its parts.\n\n```python-run\nproduce, session, sequence = \"TOM\", \"S014\", 7\nprint(f\"{produce}_{session}_{sequence:03d}.jpg\")\n```",
+      "code": "TOM_S014_007.jpg\nTOM_S014_008.jpg",
+      "code_label": "batch-listing.txt",
+      "language": "bash",
+      "starter_code": "",
+      "instructions": "",
+      "video_url": "",
+      "is_published": false,
+      "requires_review": false,
+      "rubric_criteria": [],
+      "questions": [],
+      "test_cases": []
+    },
+    {
+      "title": "Checkpoint: naming and metadata",
+      "type": "quiz",
+      "content": "Five minutes. You need 80% to move on.",
+      "code": "",
+      "code_label": "example.py",
+      "language": "python",
+      "starter_code": "",
+      "instructions": "",
+      "video_url": "",
+      "is_published": false,
+      "requires_review": false,
+      "rubric_criteria": [],
+      "questions": [
+        {
+          "question_text": "A capture arrives with no session id. What is the correct action?",
+          "question_type": "multiple_choice",
+          "options": [
+            "Quarantine the file and ask the collector to re-submit it with a session id",
+            "Invent a session id so the batch stays complete",
+            "Delete the file",
+            "Publish it and fix the id later"
+          ],
+          "correct_answer": "Quarantine the file and ask the collector to re-submit it with a session id",
+          "explanation": "Missing provenance is never repaired by guessing. Quarantine keeps the batch honest."
+        },
+        {
+          "question_text": "print(f\"{7:03d}\")",
+          "question_type": "code_output",
+          "options": [
+            "007",
+            "7",
+            "700",
+            "0007"
+          ],
+          "correct_answer": "007",
+          "explanation": "The 03d format pads the number to three digits, which keeps names sortable."
+        }
+      ],
+      "test_cases": []
+    },
+    {
+      "title": "Coding test: validate a capture name",
+      "type": "mini_project",
+      "content": "",
+      "code": "",
+      "code_label": "example.py",
+      "language": "python",
+      "starter_code": "import re\n\n\ndef validate_name(name):\n    \"\"\"Return True when the capture name follows the collection standard.\"\"\"\n    pass",
+      "instructions": "## Task\n\nImplement `validate_name(name)`. It returns `True` when `name` follows\n`<PRODUCE>_<SESSION>_<SEQ>.jpg`, where produce is three uppercase letters,\nsession is `S` plus three digits, and sequence is exactly three digits.\n\nAnything else returns `False`. Do not raise on malformed input.",
+      "video_url": "",
+      "is_published": false,
+      "requires_review": false,
+      "rubric_criteria": [],
+      "questions": [],
+      "test_cases": [
+        {
+          "description": "validate_name(\"TOM_S014_007.jpg\")",
+          "test_code": "",
+          "expected_output": "True"
+        },
+        {
+          "description": "validate_name(\"tom_S014_007.jpg\")",
+          "test_code": "",
+          "expected_output": "False"
+        },
+        {
+          "description": "validate_name(\"TOM_S14_7.jpg\")",
+          "test_code": "",
+          "expected_output": "False"
+        },
+        {
+          "description": "validate_name(\"\")",
+          "test_code": "",
+          "expected_output": "False"
+        }
+      ]
+    },
+    {
+      "title": "Project: batch validation report",
+      "type": "project",
+      "content": "",
+      "code": "",
+      "code_label": "example.py",
+      "language": "python",
+      "starter_code": "def build_report(names):\n    \"\"\"Return a validation report for a batch of capture names.\"\"\"\n    pass",
+      "instructions": "## Brief\n\nGiven a list of capture file names, produce a report that counts valid names,\nlists every rejection with its reason, and never silently drops a record.\n\nReturn a dict with the keys `total`, `valid`, and `rejected`, where `rejected`\nis a list of `{\"name\": ..., \"reason\": ...}` entries.\n\n[ADJUST: confirm the rejection reasons the QC team wants named]",
+      "video_url": "",
+      "is_published": false,
+      "requires_review": true,
+      "rubric_criteria": [
+        {
+          "id": "acceptance_tests",
+          "title": "Acceptance tests pass",
+          "description": "Objective score from the number of acceptance tests passed.",
+          "max_points": 50
+        },
+        {
+          "id": "code_quality",
+          "title": "Code quality and structure",
+          "description": "Clear functions, meaningful names, readable orchestration.",
+          "max_points": 15
+        },
+        {
+          "id": "trust_mindset",
+          "title": "Operations and trust mindset",
+          "description": "Honest missing values and surfaced validation errors.",
+          "max_points": 15
+        },
+        {
+          "id": "writeup",
+          "title": "Write-up quality",
+          "description": "Accurate explanation of the validation decisions taken.",
+          "max_points": 15
+        },
+        {
+          "id": "reproducibility",
+          "title": "Reproducibility and hygiene",
+          "description": "Runs from a clean checkout and avoids absolute paths.",
+          "max_points": 5
+        }
+      ],
+      "questions": [],
+      "test_cases": [
+        {
+          "description": "build_report([\"TOM_S014_007.jpg\"])[\"valid\"]",
+          "test_code": "",
+          "expected_output": "1"
+        },
+        {
+          "description": "build_report([\"bad.jpg\"])[\"rejected\"][0][\"name\"]",
+          "test_code": "",
+          "expected_output": "bad.jpg"
+        }
+      ]
+    },
+    {
+      "title": "Assessment: a QC gate that failed",
+      "type": "assessment",
+      "content": "## Assessment\n\nDescribe a batch that cleared gate one and failed gate two.\n\n1. What did gate one check, and why did it pass?\n2. What did gate two catch?\n3. What change upstream would have caught it earlier?\n\nSubmit 400 to 600 words. Your instructor reviews this against the rubric.",
+      "code": "",
+      "code_label": "example.py",
+      "language": "python",
+      "starter_code": "",
+      "instructions": "",
+      "video_url": "",
+      "is_published": false,
+      "requires_review": true,
+      "rubric_criteria": [
+        {
+          "id": "understanding",
+          "title": "Understanding and accuracy",
+          "description": "Accurate understanding of both quality gates.",
+          "max_points": 40
+        },
+        {
+          "id": "application",
+          "title": "Application and reasoning",
+          "description": "Applies the concepts to a concrete batch and explains the reasoning.",
+          "max_points": 30
+        },
+        {
+          "id": "evidence",
+          "title": "Evidence and completeness",
+          "description": "Supports the account with specifics rather than generalities.",
+          "max_points": 20
+        },
+        {
+          "id": "clarity",
+          "title": "Clarity and presentation",
+          "description": "Clear, organized, and professional.",
+          "max_points": 10
+        }
+      ],
+      "questions": [],
+      "test_cases": []
+    },
+    {
+      "title": "Discussion: the cost of a bad record",
+      "type": "discussion",
+      "content": "One malformed record can survive all the way into a trained model.\n\nPost one example from your own work, in your track, where a small data\ndefect became expensive later. Then reply to one colleague with the check\nyou would add to catch it at collection time.",
+      "code": "",
+      "code_label": "example.py",
+      "language": "python",
+      "starter_code": "",
+      "instructions": "",
+      "video_url": "",
+      "is_published": false,
+      "requires_review": false,
+      "rubric_criteria": [],
+      "questions": [],
+      "test_cases": []
+    }
+  ]
+}
